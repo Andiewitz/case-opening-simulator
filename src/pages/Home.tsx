@@ -32,8 +32,8 @@ export default function Home({ user }: { user: any }) {
         >
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-white mb-2">CS:GO / CS2 Cases</h1>
-                    <p className="text-neutral-400">Open cases safely with virtual balance. No real money required.</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-white mb-2">CS:GO / CS2 Cases & Capsules</h1>
+                    <p className="text-neutral-400">Open cases and capsules safely with virtual balance. No real money required.</p>
                 </div>
             </div>
 

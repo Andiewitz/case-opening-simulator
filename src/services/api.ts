@@ -8,8 +8,11 @@ export async function getCrates() {
     if (cachedCrates.length > 0) return cachedCrates;
     const res = await fetch(`${BASE_URL}/crates.json`);
     const data = await res.json();
-    // Only return cases that contain items
-    cachedCrates = data.filter((c: any) => c.type === "Case" && c.contains && c.contains.length > 0);
+    // Only return cases and sticker capsules that contain items
+    cachedCrates = data.filter((c: any) => 
+        (c.type === "Case" || c.type === "Sticker Capsule" || c.type === "Autograph Capsule") && 
+        c.contains && c.contains.length > 0
+    );
     return cachedCrates;
 }
 
@@ -24,10 +27,13 @@ const RARITY_PRICES: Record<string, {min: number, max: number}> = {
     "rarity_common": { min: 0.1, max: 0.5 }, // Consumer
     "rarity_uncommon": { min: 0.2, max: 1 }, // Industrial
     "rarity_rare_weapon": { min: 0.5, max: 5 }, // Mil-Spec
+    "rarity_rare": { min: 0.2, max: 3 }, // High Grade
     "rarity_mythical_weapon": { min: 2, max: 15 }, // Restricted
+    "rarity_mythical": { min: 1, max: 10 }, // Remarkable
     "rarity_legendary_weapon": { min: 10, max: 50 }, // Classified
+    "rarity_legendary": { min: 5, max: 30 }, // Exotic
     "rarity_ancient_weapon": { min: 30, max: 300 }, // Covert
-    "rarity_ancient": { min: 100, max: 1500 }, // Gold / Knife / Gloves
+    "rarity_ancient": { min: 100, max: 1500 }, // Gold / Knife / Gloves / Extraordinary
 };
 
 export function simulatePriceAndCondition(item: any, isSpecialItem: boolean = false) {
@@ -40,6 +46,23 @@ export function simulatePriceAndCondition(item: any, isSpecialItem: boolean = fa
         if (item.name.toLowerCase().includes("butterfly") || item.name.toLowerCase().includes("karambit") || item.name.toLowerCase().includes("m9 bayonet")) {
              priceRange = { min: 500, max: 3000 };
         }
+    }
+
+    let basePrice = (Math.random() * (priceRange.max - priceRange.min)) + priceRange.min;
+    
+    // Stickers, Patches, Graffiti don't have wear/float/pattern/stattrak
+    const isSticker = item.id?.startsWith("sticker-") || item.id?.startsWith("patch-") || item.id?.startsWith("graffiti-");
+    
+    if (isSticker) {
+         return {
+             ...item,
+             price: parseFloat(basePrice.toFixed(2)),
+             condition: null,
+             isStatTrak: false,
+             float: null,
+             pattern: null,
+             phase: null
+         };
     }
 
     // Generate accurate float
@@ -79,8 +102,6 @@ export function simulatePriceAndCondition(item: any, isSpecialItem: boolean = fa
     
     // Pattern 1 - 1000
     const pattern = Math.floor(Math.random() * 1000) + 1;
-
-    let basePrice = (Math.random() * (priceRange.max - priceRange.min)) + priceRange.min;
     
     let finalPrice = basePrice * condMul;
     
@@ -144,6 +165,11 @@ export function generateCaseRoll(crate: any) {
     let selectedItem = null;
     let isSpecialItem = false;
     
+    const redTier = itemsByRarity["Covert"] || itemsByRarity["Extraordinary"] || [];
+    const pinkTier = itemsByRarity["Classified"] || itemsByRarity["Exotic"] || [];
+    const purpleTier = itemsByRarity["Restricted"] || itemsByRarity["Remarkable"] || itemsByRarity["High Grade (Purple)"] || [];
+    const blueTier = itemsByRarity["Mil-Spec Grade"] || itemsByRarity["High Grade"] || itemsByRarity["Industrial Grade"] || itemsByRarity["Consumer Grade"] || itemsByRarity["Base Grade"] || contains;
+
     if (roll <= 0.26 && hasRare) {
         // Gold
         selectedItem = containsRare[Math.floor(Math.random() * containsRare.length)];
@@ -152,17 +178,16 @@ export function generateCaseRoll(crate: any) {
             rarity: { id: "rarity_ancient", name: "Rare Special Item", color: "#ffd700" } // Override to GOLD
         };
         isSpecialItem = true;
-    } else if (roll <= 0.90 && itemsByRarity["Covert"]) {
-        selectedItem = itemsByRarity["Covert"][Math.floor(Math.random() * itemsByRarity["Covert"].length)];
-    } else if (roll <= 4.10 && itemsByRarity["Classified"]) {
-        selectedItem = itemsByRarity["Classified"][Math.floor(Math.random() * itemsByRarity["Classified"].length)];
-    } else if (roll <= 20.08 && itemsByRarity["Restricted"]) {
-        selectedItem = itemsByRarity["Restricted"][Math.floor(Math.random() * itemsByRarity["Restricted"].length)];
+    } else if (roll <= 0.90 && redTier.length > 0) {
+        selectedItem = redTier[Math.floor(Math.random() * redTier.length)];
+    } else if (roll <= 4.10 && pinkTier.length > 0) {
+        selectedItem = pinkTier[Math.floor(Math.random() * pinkTier.length)];
+    } else if (roll <= 20.08 && purpleTier.length > 0) {
+        selectedItem = purpleTier[Math.floor(Math.random() * purpleTier.length)];
     } else {
         // Fallback to Mil-Spec or any bottom tier
-        const bottomTier = itemsByRarity["Mil-Spec Grade"] || contains;
-        if (bottomTier && bottomTier.length > 0) {
-             selectedItem = bottomTier[Math.floor(Math.random() * bottomTier.length)];
+        if (blueTier && blueTier.length > 0) {
+             selectedItem = blueTier[Math.floor(Math.random() * blueTier.length)];
         }
     }
     

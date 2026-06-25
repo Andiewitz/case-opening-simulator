@@ -69,13 +69,23 @@ export default function CaseOpener({ user }: { user: any }) {
             const pool = crate.contains || [];
             for (let i = 0; i < 60; i++) {
                 if (i === 45) { // The winner is perfectly mapped to index 45
-                    items.push({ ...savedItem, color: savedItem.color || winner.rarity?.color });
+                    const winnerReelItem = { ...savedItem, color: savedItem.color || winner.rarity?.color };
+                    if (winnerReelItem.rarity?.name === "Rare Special Item") {
+                        winnerReelItem.image = "/gold_item.svg";
+                        winnerReelItem.name = "★ Rare Special Item ★";
+                    }
+                    items.push(winnerReelItem);
                 } else {
                     let randomVisual: any;
                     // Provide a 10% chance to show a GOLD item on the reel if the case has rare items
                     if (crate.contains_rare && crate.contains_rare.length > 0 && Math.random() < 0.1) {
                          randomVisual = crate.contains_rare[Math.floor(Math.random() * crate.contains_rare.length)];
-                         items.push({ ...randomVisual, color: "#ffd700", name: randomVisual.name }); // Force gold color on reel
+                         items.push({ 
+                             ...randomVisual, 
+                             color: "#ffd700", 
+                             name: "★ Rare Special Item ★",
+                             image: "/gold_item.svg"
+                         }); // Force gold color and icon on reel
                     } else {
                          randomVisual = pool[Math.floor(Math.random() * pool.length)];
                          items.push({ ...randomVisual, color: randomVisual.rarity?.color || "#b0c3d9" });
@@ -97,18 +107,23 @@ export default function CaseOpener({ user }: { user: any }) {
                         const targetX = -(45 * itemWidth) - 75 + randomOffset;
                         
                         const fullDuration = getCaseOpenDuration() || 11.5;
-                        const scrollDuration = Math.max(1, fullDuration - 5);
-                        
-                        reelRef.current.style.transition = `transform ${scrollDuration}s cubic-bezier(0.1, 0.9, 0.2, 1)`;
-                        reelRef.current.style.transform = `translateX(${targetX}px)`;
+                        const delayBeforeSpin = 1.5;
+                        const scrollDuration = Math.max(1, fullDuration - 5 - delayBeforeSpin);
                         
                         playCaseOpenSound();
+                        
+                        setTimeout(() => {
+                            if (reelRef.current) {
+                                reelRef.current.style.transition = `transform ${scrollDuration}s cubic-bezier(0.05, 0.95, 0.1, 1)`;
+                                reelRef.current.style.transform = `translateX(${targetX}px)`;
+                            }
+                        }, delayBeforeSpin * 1000);
                         
                         setTimeout(() => {
                             playReveal(savedItem.color || winner.rarity?.color);
                             setShowResult(true);
                             setOpening(false);
-                        }, scrollDuration * 1000 + 500);
+                        }, (delayBeforeSpin + scrollDuration) * 1000 + 500);
                     }
                 }, 50);
             });
@@ -274,9 +289,15 @@ export default function CaseOpener({ user }: { user: any }) {
                                    transition={{ delay: 0.4 }}
                                    className="flex flex-wrap items-center justify-center gap-2 mb-4 z-10 font-mono"
                                >
-                                   <span className="text-neutral-400">{winningItem.condition}</span>
-                                   <span className="bg-neutral-800 text-neutral-300 px-2 py-0.5 text-xs rounded">Float: {winningItem.float?.toFixed(4)}</span>
-                                   <span className="bg-neutral-800 text-neutral-300 px-2 py-0.5 text-xs rounded">Pattern: {winningItem.pattern}</span>
+                                   {winningItem.condition && (
+                                       <span className="text-neutral-400">{winningItem.condition}</span>
+                                   )}
+                                   {winningItem.float !== null && winningItem.float !== undefined && (
+                                       <span className="bg-neutral-800 text-neutral-300 px-2 py-0.5 text-xs rounded">Float: {winningItem.float?.toFixed(4)}</span>
+                                   )}
+                                   {winningItem.pattern !== null && winningItem.pattern !== undefined && (
+                                       <span className="bg-neutral-800 text-neutral-300 px-2 py-0.5 text-xs rounded">Pattern: {winningItem.pattern}</span>
+                                   )}
                                    {winningItem.phase && (
                                        <span className="bg-indigo-500/20 text-indigo-400 px-2 py-0.5 text-xs rounded font-bold">{winningItem.phase}</span>
                                    )}
