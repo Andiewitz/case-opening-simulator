@@ -35,6 +35,11 @@ export default function Home({ user }: { user: any }) {
                     <h1 className="text-3xl font-bold tracking-tight text-white mb-2">CS:GO / CS2 Cases & Capsules</h1>
                     <p className="text-neutral-400">Open cases and capsules safely with virtual balance. No real money required.</p>
                 </div>
+                {user && (
+                    <div className="flex items-center gap-2 bg-neutral-800/50 rounded-full py-1 px-3 border border-neutral-700/50">
+                        <span className="font-mono text-sm font-bold text-amber-50">${user.balance?.toFixed(2)}</span>
+                    </div>
+                )}
             </div>
 
             {!user && (
