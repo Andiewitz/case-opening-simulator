@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getCrates, generateCaseRoll, simulatePriceAndCondition } from "../services/api";
-import { openCaseAndUpdateBalance } from "../services/db";
+import { getCrates, openCase } from "../services/api";
+import { getAccessToken } from "../services/auth";
 import { ChevronLeft } from "lucide-react";
 import * as React from "react"; 
 import { playReveal, playSell, preloadCaseOpenSound, playCaseOpenSound, getCaseOpenDuration, stopCaseOpenSound } from "../lib/sounds";
@@ -55,22 +55,21 @@ export default function CaseOpener({ user }: { user: any }) {
         }
         
         try {
-            // 1. Generate Winner Result (DB saves this exact item)
-            const winner = generateCaseRoll(crate);
-            
-            // 2. Perform DB transaction BEFORE starting visual to prevent sync issues
-            const savedItem = await openCaseAndUpdateBalance(user.id, caseCost, winner);
+            const token = getAccessToken();
+            // 1. Server generates the roll, deducts balance, and saves the item atomically
+            const savedItem = await openCase(crate.id, token);
             if (!savedItem) {
                  throw new Error("Failed transaction.");
             }
+            const winner = savedItem;
             
-            // 3. Generate Visual Reel
+            // 2. Generate Visual Reel
             const items = [];
             const pool = crate.contains || [];
             for (let i = 0; i < 60; i++) {
                 if (i === 45) { // The winner is perfectly mapped to index 45
                     const winnerReelItem = { ...savedItem, color: savedItem.color || winner.rarity?.color };
-                    if (winnerReelItem.rarity?.name === "Rare Special Item") {
+                    if (winnerReelItem.color === "#ffd700" || winnerReelItem.rarity === "Rare Special Item") {
                         winnerReelItem.image = "/gold_item.svg";
                         winnerReelItem.name = "★ Rare Special Item ★";
                     }
