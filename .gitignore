@@ -1,8 +1,14 @@
 node_modules/
 build/
 dist/
+backend/dist/
 coverage/
 .DS_Store
 *.log
 .env*
 !.env.example
+.terraform/
+*.tfstate
+*.tfstate.backup
+tfplan
+.terraform.lock.hcl
