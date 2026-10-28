@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { onAuthStateChanged, getCurrentUser, getAccessToken } from "./services/auth";
+import { onAuthStateChanged, getCurrentUser, getAccessToken, completeSignIn } from "./services/auth";
 import { getUser } from "./services/api";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
@@ -13,6 +13,16 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
+
+    const handleCallback = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      if (code) {
+        await completeSignIn(code);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    };
+
     const unsub = onAuthStateChanged(async (u) => {
       if (!mounted) return;
       if (u) {
@@ -31,6 +41,8 @@ export default function App() {
       }
       setLoading(false);
     });
+
+    handleCallback();
     return () => { mounted = false; unsub(); };
   }, []);
 
