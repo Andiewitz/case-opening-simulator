@@ -1,6 +1,6 @@
 {
   "name": "CS2 Unboxed",
-  "description": "A polished CS2 case opening simulator with realistic drop rates, float/pattern simulation (including Blue Gems & Doppler Phases), sound effects, and a live Firestore inventory.",
+  "description": "A polished CS2 case opening simulator with realistic drop rates, float/pattern simulation (including Blue Gems & Doppler Phases), sound effects, and an inventory system.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
