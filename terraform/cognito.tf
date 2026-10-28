@@ -50,6 +50,7 @@ resource "aws_cognito_user_pool_client" "app" {
   refresh_token_validity = 30
 
   explicit_auth_flows = [
+    "ALLOW_USER_PASSWORD_AUTH",
     "ALLOW_USER_SRP_AUTH",
     "ALLOW_REFRESH_TOKEN_AUTH",
   ]
@@ -66,31 +67,6 @@ resource "aws_cognito_user_pool_client" "app" {
 
   tags = {
     Name        = "${var.app_name}-client"
-    Environment = var.environment
-  }
-}
-
-# Optional Google federation via Cognito hosted UI. Only created when client credentials are provided.
-resource "aws_cognito_identity_provider" "google" {
-  count          = var.cognito_google_client_id != "" ? 1 : 0
-  user_pool_id   = aws_cognito_user_pool.app.id
-  provider_name  = "Google"
-  provider_type  = "Google"
-  provider_details = {
-    client_id     = var.cognito_google_client_id
-    client_secret = var.cognito_google_client_secret
-    scopes        = "openid email profile"
-  }
-
-  attribute_mapping = {
-    email      = "email"
-    given_name = "given_name"
-    family_name = "family_name"
-    profile    = "picture"
-  }
-
-  tags = {
-    Name        = "${var.app_name}-idp-google"
     Environment = var.environment
   }
 }

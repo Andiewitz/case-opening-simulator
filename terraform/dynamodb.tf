@@ -1,6 +1,8 @@
 resource "aws_dynamodb_table" "users" {
   name         = "${var.app_name}-users-${var.environment}"
-  billing_mode = var.dynamodb_billing_mode
+  billing_mode = "PROVISIONED"
+  read_capacity  = 5
+  write_capacity = 5
   hash_key     = "userId"
 
   attribute {
@@ -18,7 +20,9 @@ resource "aws_dynamodb_table" "users" {
 
 resource "aws_dynamodb_table" "inventory_items" {
   name         = "${var.app_name}-inventory-items-${var.environment}"
-  billing_mode = var.dynamodb_billing_mode
+  billing_mode = "PROVISIONED"
+  read_capacity  = 5
+  write_capacity = 5
   hash_key     = "userId"
   range_key    = "itemId"
 
