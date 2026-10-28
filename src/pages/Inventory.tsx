@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { subscribeToInventory, sellItem } from "../services/db";
+import { getInventory, sellItem } from "../services/api";
+import { getAccessToken } from "../services/auth";
 import { motion, AnimatePresence } from "motion/react";
 
 import { playSell } from "../lib/sounds";
@@ -11,19 +12,31 @@ export default function Inventory({ user }: { user: any }) {
 
     useEffect(() => {
         if (!user) return;
-        const unsub = subscribeToInventory(user.id, (data) => {
-            setItems(data);
-            setLoading(false);
-        });
-        return () => unsub();
+        let mounted = true;
+        const load = async () => {
+            const token = getAccessToken();
+            try {
+                const data = await getInventory(user.id, token);
+                if (mounted) setItems(data);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        };
+        load();
+        return () => { mounted = false; };
     }, [user]);
 
     const handleSell = async (itemId: string, price: number) => {
         if (!user || selling) return;
         setSelling(true);
         try {
-            await sellItem(user.id, itemId, price);
+            const token = getAccessToken();
+            await sellItem(itemId, price, token);
             playSell();
+            const data = await getInventory(user.id, token);
+            setItems(data);
         } catch (e) {
             console.error("Sell failed", e);
         } finally {
@@ -36,19 +49,19 @@ export default function Inventory({ user }: { user: any }) {
         if(!confirm || !user || selling) return;
         
         setSelling(true);
-        // Because batching inside loop without proper batched chunks can be dangerous when > 500 items,
-        // we'll loop sequentially here, but doing it in chunks could be better for massive inventories.
-        // runTransaction runs 1 by 1 securely.
         try {
-             for(const item of items) {
-                 await sellItem(user.id, item.id, item.price);
-             }
-             if (items.length > 0) playSell();
+            const token = getAccessToken();
+            for(const item of items) {
+                await sellItem(item.id, item.price, token);
+            }
+            if (items.length > 0) playSell();
+            const data = await getInventory(user.id, token);
+            setItems(data);
         } catch(e) {
-             console.error("Sell all failed", e);
-             alert("Error during sell all process.");
+            console.error("Sell all failed", e);
+            alert("Error during sell all process.");
         } finally {
-             setSelling(false);
+            setSelling(false);
         }
     }
 
