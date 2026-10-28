@@ -1,7 +1,7 @@
 import { Outlet, Link } from "react-router-dom";
 import { PackageOpen, LayoutGrid, Menu } from "lucide-react";
 import { useState } from "react";
-import { signIn, logout } from "../services/db";
+import { signIn, signOut } from "../services/auth";
 
 export default function Layout({ user }: { user: any }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -35,7 +35,7 @@ export default function Layout({ user }: { user: any }) {
                   </span>
                 </div>
                 <button
-                  onClick={logout}
+                  onClick={signOut}
                   className="hidden sm:flex p-2 hover:bg-neutral-800 rounded-full transition-colors text-neutral-400 hover:text-white"
                   title="Sign Out"
                 >
@@ -71,7 +71,7 @@ export default function Layout({ user }: { user: any }) {
               <PackageOpen className="w-5 h-5" />
               Inventory
             </Link>
-            <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="text-neutral-300 hover:text-white font-medium flex items-center gap-2 text-left">
+            <button onClick={() => { signOut(); setMobileMenuOpen(false); }} className="text-neutral-300 hover:text-white font-medium flex items-center gap-2 text-left">
               Sign Out
             </button>
           </div>
