@@ -1,0 +1,12 @@
+# S3 backend example — uncomment and configure your bucket/table to enable remote state.
+# Do NOT commit real state files or secrets.
+
+# terraform {
+#   backend "s3" {
+#     bucket         = "cs2-unboxed-terraform-state"
+#     key            = "cs2-unboxed/terraform.tfstate"
+#     region         = "us-east-1"
+#     encrypt        = true
+#     dynamodb_table = "cs2-unboxed-terraform-locks"
+#   }
+# }

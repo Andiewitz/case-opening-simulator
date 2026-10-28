@@ -1,0 +1,11 @@
+aws_region        = "us-east-1"
+app_name          = "cs2-unboxed"
+environment       = "dev"
+frontend_domain   = ""
+
+# Set these after creating a Google Cloud OAuth client for Cognito federation
+cognito_google_client_id     = ""
+cognito_google_client_secret = ""
+
+lambda_memory_size = 256
+lambda_timeout     = 30
