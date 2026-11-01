@@ -251,4 +251,11 @@ resource "aws_api_gateway_stage" "api" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   stage_name    = var.environment
   deployment_id = aws_api_gateway_deployment.api.id
+
+  # Gzip responses >= 1 KB. The /crates feed is ~5 MB of JSON and compresses
+  # to ~5-10x smaller, which is the single biggest perceived-latency win.
+  # Compression on API Gateway REST APIs is enabled via a stage variable.
+  variables = {
+    minimumCompressionSize = "1024"
+  }
 }

@@ -16,6 +16,8 @@ for H in getCrates openCase sellItem getUser getInventory; do
   echo "Bundling handler: $H"
   "$ESBUILD" "backend/src/handlers/$H.ts" \
     --bundle --platform=node --format=cjs --target=node22 \
+    --external:@aws-sdk/* \
+    --minify \
     --outfile="$OUT/$H.js"
 done
 

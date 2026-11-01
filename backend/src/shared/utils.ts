@@ -9,6 +9,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { CognitoIdentityProviderClient, GetUserCommand } from "@aws-sdk/client-cognito-identity-provider";
+import { gzipSync } from "node:zlib";
 
 const ddbClient = new DynamoDBClient({});
 export const docClient = DynamoDBDocumentClient.from(ddbClient);
@@ -29,6 +30,23 @@ export function json(statusCode: number, body: unknown) {
     statusCode,
     headers: corsHeaders,
     body: typeof body === "string" ? body : JSON.stringify(body),
+  };
+}
+
+/**
+ * Gzip-compressed JSON response. API Gateway's built-in stage compression
+ * doesn't reliably apply to AWS_PROXY responses, so for large payloads
+ * (the ~5 MB crates feed compresses to ~0.4 MB) we gzip in the handler and
+ * pass the bytes through with `isBase64Encoded`.
+ */
+export function jsonGzip(statusCode: number, body: unknown) {
+  const raw = Buffer.from(typeof body === "string" ? body : JSON.stringify(body));
+  if (raw.length < 30_000) return json(statusCode, body);
+  return {
+    statusCode,
+    headers: { ...corsHeaders, "Content-Encoding": "gzip" },
+    isBase64Encoded: true,
+    body: gzipSync(raw).toString("base64"),
   };
 }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getInventory, sellItem } from "../services/api";
 import { getValidAccessToken } from "../services/auth";
+import { steamImg } from "../lib/steam";
 import { motion, AnimatePresence } from "motion/react";
 
 import { playSell } from "../lib/sounds";
@@ -142,7 +143,7 @@ export default function Inventory({ user }: { user: any }) {
                             </div>
                             
                             <div className="w-full aspect-square bg-gradient-to-br from-neutral-800 to-neutral-900/50 rounded-lg p-2 mb-3 flex items-center justify-center">
-                                <img src={item.image} alt={item.name} className="w-full object-contain" loading="lazy" />
+                                <img src={steamImg(item.image)} alt={item.name} className="w-full object-contain" loading="lazy" />
                             </div>
                             
                             <div className="flex-1 flex flex-col justify-end mt-2">

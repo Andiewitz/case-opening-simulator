@@ -5,6 +5,7 @@ import { getValidAccessToken } from "../services/auth";
 import { ChevronLeft } from "lucide-react";
 import * as React from "react"; 
 import { playReveal, playSell, preloadCaseOpenSound, playCaseOpenSound, getCaseOpenDuration, stopCaseOpenSound } from "../lib/sounds";
+import { steamImg } from "../lib/steam";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function CaseOpener({ user }: { user: any }) {
@@ -172,9 +173,9 @@ export default function CaseOpener({ user }: { user: any }) {
                 <div className="w-full lg:w-1/3 bg-neutral-900 border border-neutral-800 rounded-2xl p-6 flex flex-col items-center flex-shrink-0">
                      <div className="w-48 h-48 bg-gradient-to-br from-neutral-800 to-neutral-900 rounded-xl p-4 flex items-center justify-center relative shadow-lg shadow-black/50 mb-6 group">
                             <img 
-                                src={crate.image} 
+                                src={steamImg(crate.image)} 
                                 alt={crate.name} 
-                                className="w-full object-contain group-hover:rotate-12 transition-transform duration-500" 
+                                className="w-full object-contain group-hover:rotate-12 transition-transform duration-500"
                             />
                     </div>
                     <h1 className="text-2xl font-bold text-center text-white mb-2">{crate.name}</h1>
@@ -239,7 +240,7 @@ export default function CaseOpener({ user }: { user: any }) {
                                       style={{ borderBottomColor: item.color || item.rarity?.color }}
                                  >
                                       <div className="h-3/4 w-full flex items-center justify-center overflow-hidden p-2">
-                                           <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                                           <img src={steamImg(item.image)} alt={item.name} className="w-full h-full object-contain" />
                                       </div>
                                       <div className="h-1/4 w-full flex flex-col justify-center items-center px-1">
                                           {item.phase && <span className="text-[8px] text-indigo-400 font-bold mb-0.5">{item.phase}</span>}
@@ -269,7 +270,7 @@ export default function CaseOpener({ user }: { user: any }) {
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}
                                         transition={{ delay: 0.2, type: "spring", bounce: 0.5 }}
-                                        src={winningItem.image} alt={winningItem.name} 
+                                        src={steamImg(winningItem.image)} alt={winningItem.name} 
                                         className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(0,0,0,0.5)] animate-pulse" 
                                     />
                                </div>
@@ -344,7 +345,7 @@ export default function CaseOpener({ user }: { user: any }) {
                                             style={{ borderBottomColor: item.rarity?.color }}
                                        >
                                             <div className="w-full aspect-square flex items-center justify-center p-2 mb-2 bg-gradient-to-br from-neutral-800/50 to-neutral-900/50 rounded drop-shadow-sm">
-                                                <img src={item.image} alt={item.name} className="w-full object-contain" loading="lazy" />
+                                                <img src={steamImg(item.image)} alt={item.name} className="w-full object-contain" loading="lazy" />
                                             </div>
                                             <p className="text-[10px] text-neutral-300 line-clamp-2 w-full leading-tight" title={item.name}>{item.name}</p>
                                        </div>

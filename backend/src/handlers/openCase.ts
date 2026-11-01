@@ -1,6 +1,7 @@
 import { docClient, TABLE_USERS, TABLE_INVENTORY, json, requireAuth, corsHeaders } from "../shared/utils";
 import { GetCommand, PutCommand, UpdateCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { generateCaseRoll } from "../shared/simulation";
+import { loadCrates } from "../shared/crates";
 import { CASE_COST } from "../config";
 
 export const handler = async (event: any): Promise<any> => {
@@ -28,8 +29,7 @@ export const handler = async (event: any): Promise<any> => {
     const user = userSnap.Item as any;
     if (user.balance < CASE_COST) return json(400, { error: "Insufficient balance" });
 
-    const res = await fetch(`https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/crates.json`);
-    const crates = await res.json();
+    const crates = await loadCrates();
     const crate = crates.find((c: any) => c.id === crateId);
     if (!crate) return json(404, { error: "Crate not found" });
 

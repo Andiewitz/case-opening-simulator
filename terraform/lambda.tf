@@ -65,3 +65,12 @@ resource "aws_iam_role_policy_attachment" "lambda_cognito_attach" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = aws_iam_policy.lambda_cognito.arn
 }
+
+# Lambda log groups: keep one week of logs. The AWS default is "never
+# expire", so unmanaged log storage grows — and bills — forever.
+resource "aws_cloudwatch_log_group" "lambda" {
+  for_each = local.handlers
+
+  name              = "/aws/lambda/${aws_lambda_function.handlers[each.key].function_name}"
+  retention_in_days = 7
+}

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getCrates } from "../services/api";
 import { motion } from "motion/react";
+import { steamImg } from "../lib/steam";
 
 export default function Home({ user }: { user: any }) {
     const [crates, setCrates] = useState<any[]>([]);
@@ -74,7 +75,7 @@ export default function Home({ user }: { user: any }) {
                         >
                             <div className="w-full aspect-square bg-gradient-to-br from-neutral-800 to-neutral-900 rounded-lg p-2 flex items-center justify-center relative overflow-hidden group-hover:shadow-[0_0_20px_rgba(244,63,94,0.15)] transition-shadow">
                                 <img 
-                                    src={crate.image} 
+                                    src={steamImg(crate.image)} 
                                     alt={crate.name} 
                                     className="w-full object-contain group-hover:scale-110 transition-transform duration-500" 
                                     loading="lazy"
