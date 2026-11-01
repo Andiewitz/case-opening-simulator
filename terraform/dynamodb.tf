@@ -1,8 +1,8 @@
+# On-demand billing: pay per actual read/write, nothing while idle.
+# (Provisioned 5+5 RCU/WCU cost ~$5.70/mo even at zero traffic.)
 resource "aws_dynamodb_table" "users" {
   name         = "${var.app_name}-users-${var.environment}"
-  billing_mode = "PROVISIONED"
-  read_capacity  = 5
-  write_capacity = 5
+  billing_mode = "PAY_PER_REQUEST"
   hash_key     = "userId"
 
   attribute {
@@ -20,9 +20,7 @@ resource "aws_dynamodb_table" "users" {
 
 resource "aws_dynamodb_table" "inventory_items" {
   name         = "${var.app_name}-inventory-items-${var.environment}"
-  billing_mode = "PROVISIONED"
-  read_capacity  = 5
-  write_capacity = 5
+  billing_mode = "PAY_PER_REQUEST"
   hash_key     = "userId"
   range_key    = "itemId"
 
