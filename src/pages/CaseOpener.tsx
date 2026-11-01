@@ -2,26 +2,39 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { getCrates, openCase } from "../services/api";
 import { getValidAccessToken } from "../services/auth";
-import { ChevronLeft } from "lucide-react";
-import * as React from "react"; 
-import { playReveal, playSell, preloadCaseOpenSound, playCaseOpenSound, getCaseOpenDuration, stopCaseOpenSound } from "../lib/sounds";
+import { playReveal, preloadCaseOpenSound, playCaseOpenSound, getCaseOpenDuration, stopCaseOpenSound } from "../lib/sounds";
 import { steamImg } from "../lib/steam";
 import { motion, AnimatePresence } from "motion/react";
+import "./caseopener.css";
+
+/** "MP7 | Skulls" -> ["MP7", "Skulls"] — the design splits weapon and skin lines. */
+function splitName(name: string): [string, string] {
+    const i = (name || "").indexOf("|");
+    if (i === -1) return [name || "", ""];
+    return [name.slice(0, i).trim(), name.slice(i + 1).trim()];
+}
+
+/** A couple of names are too long for the 108px preview tiles. */
+function shortWeapon(w: string): string {
+    if (w === "Desert Eagle") return "DEAGLE";
+    if (w === "Dual Berettas") return "DUALS";
+    return w;
+}
 
 export default function CaseOpener({ user }: { user: any }) {
     const { id } = useParams();
     const [crate, setCrate] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    
+
     const [opening, setOpening] = useState(false);
     const [winningItem, setWinningItem] = useState<any>(null);
     const [showResult, setShowResult] = useState(false);
-    
+
     // The items to spin through
     const [reelItems, setReelItems] = useState<any[]>([]);
-    
+
     const caseCost = 2.50; // Fixed key cost essentially
-    
+
     const reelRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -31,7 +44,7 @@ export default function CaseOpener({ user }: { user: any }) {
             setCrate(c);
             setLoading(false);
         });
-        
+
         return () => {
             stopCaseOpenSound();
         };
@@ -43,18 +56,18 @@ export default function CaseOpener({ user }: { user: any }) {
             alert("Insufficient balance or not logged in.");
             return;
         }
-        
+
         if (!crate) return;
-        
+
         setOpening(true);
         setShowResult(false);
         setWinningItem(null);
-        
+
         if (reelRef.current) {
             reelRef.current.style.transition = 'none';
             reelRef.current.style.transform = `translateX(0px)`;
         }
-        
+
         try {
             const token = await getValidAccessToken();
             // 1. Server generates the roll, deducts balance, and saves the item atomically
@@ -63,7 +76,7 @@ export default function CaseOpener({ user }: { user: any }) {
                  throw new Error("Failed transaction.");
             }
             const winner = savedItem;
-            
+
             // 2. Generate Visual Reel
             const items = [];
             const pool = crate.contains || [];
@@ -80,9 +93,9 @@ export default function CaseOpener({ user }: { user: any }) {
                     // Provide a 10% chance to show a GOLD item on the reel if the case has rare items
                     if (crate.contains_rare && crate.contains_rare.length > 0 && Math.random() < 0.1) {
                          randomVisual = crate.contains_rare[Math.floor(Math.random() * crate.contains_rare.length)];
-                         items.push({ 
-                             ...randomVisual, 
-                             color: "#ffd700", 
+                         items.push({
+                             ...randomVisual,
+                             color: "#ffd700",
                              name: "★ Rare Special Item ★",
                              image: "/gold_item.svg"
                          }); // Force gold color and icon on reel
@@ -94,36 +107,45 @@ export default function CaseOpener({ user }: { user: any }) {
             }
             setReelItems(items);
             setWinningItem(savedItem); // Store real ID item
-            
+
             // 4. Force DOM repaint then CSS spin
             requestAnimationFrame(() => {
                 setTimeout(() => {
                     if (reelRef.current) {
-                        const itemWidth = 160; 
+                        // ─── AUDIO-SYNCED TIMING — DO NOT CHANGE ────────────────
+                        // delayBeforeSpin / scrollDuration / the +500ms reveal are
+                        // tuned so the reel lands on the winner exactly when the
+                        // case-opening audio peaks. Changing any number here
+                        // desyncs the animation from the sound.
+                        // The x-math requires the item pitch to stay at
+                        // 150px tile + 10px gap (itemWidth = 160).
+                        // ─────────────────────────────────────────────────────────
+                        const itemWidth = 160;
                         const randomOffset = Math.floor(Math.random() * 80) - 40;
-                        
+
                         // left-[50%] on container means index 0 left aligns to center
                         // Shift left by 45 instances + half an item to perfectly center element 45
                         const targetX = -(45 * itemWidth) - 75 + randomOffset;
-                        
+
                         const fullDuration = getCaseOpenDuration() || 11.5;
                         const delayBeforeSpin = 1.5;
                         const scrollDuration = Math.max(1, fullDuration - 5 - delayBeforeSpin);
-                        
+
                         playCaseOpenSound();
-                        
+
                         setTimeout(() => {
                             if (reelRef.current) {
                                 reelRef.current.style.transition = `transform ${scrollDuration}s cubic-bezier(0.05, 0.95, 0.1, 1)`;
                                 reelRef.current.style.transform = `translateX(${targetX}px)`;
                             }
                         }, delayBeforeSpin * 1000);
-                        
+
                         setTimeout(() => {
                             playReveal(savedItem.color || winner.rarity?.color);
                             setShowResult(true);
                             setOpening(false);
                         }, (delayBeforeSpin + scrollDuration) * 1000 + 500);
+                        // ─── END AUDIO-SYNCED TIMING ────────────────────────────
                     }
                 }, 50);
             });
@@ -133,7 +155,7 @@ export default function CaseOpener({ user }: { user: any }) {
              setOpening(false);
         }
     };
-    
+
     // Reset function
     const handleReset = () => {
         stopCaseOpenSound();
@@ -147,214 +169,268 @@ export default function CaseOpener({ user }: { user: any }) {
     };
 
     if (loading) return (
-        <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
+        <div className="uo-screen -mx-4 -my-8 flex items-center justify-center" style={{ minHeight: "calc(100vh - 64px)" }}>
+            <div className="animate-spin rounded-full h-8 w-8" style={{ border: "2px solid #2c3445", borderBottomColor: "#3be83b" }}></div>
         </div>
     );
 
-    if (!crate) return <div>Case not found</div>;
+    if (!crate) return (
+        <div className="uo-screen -mx-4 -my-8 flex flex-col items-center justify-center gap-4" style={{ minHeight: "calc(100vh - 64px)" }}>
+            <div className="uo-title" style={{ fontSize: 24 }}>Case not found</div>
+            <Link to="/" className="uo-backlink">‹ Back to Cases</Link>
+        </div>
+    );
 
     const contains = crate.contains || [];
+    const isGoldItem = (item: any) =>
+        item.color === "#ffd700" || item.rarity === "Rare Special Item" || item.name === "★ Rare Special Item ★";
 
     return (
-        <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="space-y-8 max-w-5xl mx-auto"
-        >
-             <Link to="/" className="inline-flex items-center text-neutral-400 hover:text-white transition-colors">
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                Back to Cases
-            </Link>
-            
-            <div className="flex flex-col lg:flex-row gap-8 items-start">
-                {/* Case Info */}
-                <div className="w-full lg:w-1/3 bg-neutral-900 border border-neutral-800 rounded-2xl p-6 flex flex-col items-center flex-shrink-0">
-                     <div className="w-48 h-48 bg-gradient-to-br from-neutral-800 to-neutral-900 rounded-xl p-4 flex items-center justify-center relative shadow-lg shadow-black/50 mb-6 group">
-                            <img 
-                                src={steamImg(crate.image)} 
-                                alt={crate.name} 
-                                className="w-full object-contain group-hover:rotate-12 transition-transform duration-500"
+        <div className="uo-screen relative -mx-4 -my-8 overflow-hidden" style={{ minHeight: "calc(100vh - 64px)" }}>
+            <div className="uo-vignette" />
+
+            <div className="relative z-10 flex flex-col" style={{ minHeight: "calc(100vh - 64px)" }}>
+                {/* Title block */}
+                <div className="relative text-center px-4 pt-7 sm:pt-9">
+                    <Link to="/" className="uo-backlink absolute left-4 sm:left-8 top-7 sm:top-9">‹ Cases</Link>
+                    <h1 className="uo-title">Unlock Container</h1>
+                    <div className="uo-sub mt-1">Unlock <b>{crate.name}</b></div>
+                    <div className="uo-note">${caseCost.toFixed(2)} per open · items go straight to your inventory</div>
+                </div>
+
+                {/* Center stage: crate / spinning reel / result */}
+                <div className="flex-1 flex items-center justify-center w-full px-2 py-6">
+                    {!showResult && !opening && (
+                        <div className="relative flex items-center justify-center" style={{ minHeight: 250 }}>
+                            <div
+                                aria-hidden
+                                style={{
+                                    position: "absolute",
+                                    width: 460,
+                                    height: 330,
+                                    background: "radial-gradient(ellipse at center, rgba(120,140,175,0.28), transparent 65%)",
+                                }}
                             />
-                    </div>
-                    <h1 className="text-2xl font-bold text-center text-white mb-2">{crate.name}</h1>
-                    <p className="text-neutral-500 text-sm text-center mb-6">Open this case to get a random CS2 skin.</p>
-                    
-                    {!showResult && (
-                        <button 
-                            onClick={handleOpen}
-                            disabled={opening || !user || user.balance < caseCost}
-                            className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${
-                                !user ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
-                                : user.balance < caseCost ? 'bg-neutral-800 text-rose-500 cursor-not-allowed border border-rose-500/20'
-                                : opening ? 'bg-emerald-600/50 text-emerald-200 cursor-wait'
-                                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_20px_rgba(5,150,105,0.3)] hover:shadow-[0_0_30px_rgba(5,150,105,0.5)] border border-emerald-500/50 hover:-translate-y-1'
-                            }`}
-                        >
-                            {!user ? "Sign In to Open"
-                                : user.balance < caseCost ? "Insufficient Balance"
-                                : opening ? "Opening..." 
-                                : `Open Case - $${caseCost.toFixed(2)}`
-                            }
-                        </button>
-                    )}
-                    
-                    {showResult && (
-                        <div className="flex flex-col w-full gap-3">
-                            <button 
-                                onClick={handleReset}
-                                className="w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg hover:-translate-y-1 transition-all"
-                            >
-                                Continue
-                            </button>
+                            <img
+                                src={steamImg(crate.image)}
+                                alt={crate.name}
+                                className="relative transition-transform duration-500"
+                                style={{
+                                    width: 280,
+                                    maxWidth: "70vw",
+                                    transform: "rotate(-6deg)",
+                                    filter: "drop-shadow(0 40px 50px rgba(0,0,0,0.6))",
+                                }}
+                            />
                         </div>
                     )}
-                </div>
-                
-                {/* Visualizer / Drops */}
-                <div className="w-full lg:w-2/3 flex flex-col gap-8">
-                     {/* Spinner Container */}
-                     <div className="w-full bg-[#111111] border border-neutral-800 rounded-2xl h-[220px] relative overflow-hidden flex flex-col items-center justify-center shadow-inner pt-4 z-0">
-                         {/* Tick mark */}
-                         <div className="absolute top-0 bottom-0 left-1/2 -ml-0.5 w-[2px] bg-amber-400 z-20 shadow-[0_0_10px_rgba(251,191,36,1)]"></div>
-                         
-                         {(!opening && !showResult) && (
-                              <div className="absolute inset-0 flex items-center justify-center text-neutral-600 font-mono text-xl z-30">
-                                   READY TO SPIN
-                              </div>
-                         )}
-                         
-                         <div 
-                             className="flex h-[150px] items-center gap-[10px] whitespace-nowrap absolute left-[50%] z-10" 
-                             ref={reelRef}
-                             style={{
-                                  transform: 'translateX(0)',
-                                  willChange: 'transform'
-                             }}
-                         >
-                            {reelItems.map((item, index) => (
-                                 <div 
-                                      key={index} 
-                                      className="w-[150px] h-[150px] flex-shrink-0 bg-neutral-900 border-b-4 flex flex-col justify-between items-center rounded-lg p-2"
-                                      style={{ borderBottomColor: item.color || item.rarity?.color }}
-                                 >
-                                      <div className="h-3/4 w-full flex items-center justify-center overflow-hidden p-2">
-                                           <img src={steamImg(item.image)} alt={item.name} className="w-full h-full object-contain" />
-                                      </div>
-                                      <div className="h-1/4 w-full flex flex-col justify-center items-center px-1">
-                                          {item.phase && <span className="text-[8px] text-indigo-400 font-bold mb-0.5">{item.phase}</span>}
-                                          {item.isStatTrak && <span className="text-[8px] text-orange-500 font-bold mb-0.5">StatTrak™</span>}
-                                          <p className="text-[10px] text-neutral-300 w-full truncate text-center">{item.name}</p>
-                                      </div>
-                                 </div>
-                            ))}
-                         </div>
-                     </div>
-                     
-                     {/* Result Modal / Display */}
-                     <AnimatePresence>
-                     {showResult && winningItem && (
-                          <motion.div 
-                              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                              animate={{ opacity: 1, scale: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.9 }}
-                              transition={{ type: "spring", bounce: 0.4 }}
-                              className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl relative overflow-hidden"
-                          >
-                               <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 to-transparent z-0"></div>
-                               
-                               <div className="z-10 w-48 h-48 mb-6 relative group">
-                                    <div className="absolute inset-0 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-colors"></div>
-                                    <motion.img 
-                                        initial={{ scale: 0 }}
-                                        animate={{ scale: 1 }}
-                                        transition={{ delay: 0.2, type: "spring", bounce: 0.5 }}
-                                        src={steamImg(winningItem.image)} alt={winningItem.name} 
-                                        className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(0,0,0,0.5)] animate-pulse" 
-                                    />
-                               </div>
-                               
-                               <motion.h2 
-                                   initial={{ y: 10, opacity: 0 }}
-                                   animate={{ y: 0, opacity: 1 }}
-                                   transition={{ delay: 0.3 }}
-                                   className="text-3xl font-bold mb-1 z-10" style={{ color: winningItem.color }}
-                               >
-                                   {winningItem.name}
-                               </motion.h2>
-                               <motion.div 
-                                   initial={{ y: 10, opacity: 0 }}
-                                   animate={{ y: 0, opacity: 1 }}
-                                   transition={{ delay: 0.4 }}
-                                   className="flex flex-wrap items-center justify-center gap-2 mb-4 z-10 font-mono"
-                               >
-                                   {winningItem.condition && (
-                                       <span className="text-neutral-400">{winningItem.condition}</span>
-                                   )}
-                                   {winningItem.float !== null && winningItem.float !== undefined && (
-                                       <span className="bg-neutral-800 text-neutral-300 px-2 py-0.5 text-xs rounded">Float: {winningItem.float?.toFixed(4)}</span>
-                                   )}
-                                   {winningItem.pattern !== null && winningItem.pattern !== undefined && (
-                                       <span className="bg-neutral-800 text-neutral-300 px-2 py-0.5 text-xs rounded">Pattern: {winningItem.pattern}</span>
-                                   )}
-                                   {winningItem.phase && (
-                                       <span className="bg-indigo-500/20 text-indigo-400 px-2 py-0.5 text-xs rounded font-bold">{winningItem.phase}</span>
-                                   )}
-                                   {winningItem.isStatTrak && (
-                                       <span className="bg-orange-500/20 text-orange-500 px-2 py-0.5 text-xs rounded font-bold">StatTrak™</span>
-                                   )}
-                               </motion.div>
-                               <motion.div 
-                                   initial={{ y: 10, opacity: 0 }}
-                                   animate={{ y: 0, opacity: 1 }}
-                                   transition={{ delay: 0.5 }}
-                                   className="bg-neutral-950 px-6 py-3 rounded-full border border-neutral-800 z-10 flex items-center gap-4 shadow-inner"
-                               >
-                                   <div className="text-sm text-neutral-500">Value</div>
-                                   <div className="text-2xl font-mono font-bold text-emerald-400">${winningItem.price.toFixed(2)}</div>
-                               </motion.div>
-                          </motion.div>
-                     )}
-                     </AnimatePresence>
-                     
-                     {/* Items inside case display */}
-                     {!showResult && !opening && (
-                         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
-                             <div className="flex justify-between items-end mb-4">
-                                 <h3 className="text-lg font-bold text-white">Items in this case</h3>
-                             </div>
-                             
-                             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3">
-                                  {crate.contains_rare && crate.contains_rare.length > 0 && (
-                                      <div 
-                                           className="bg-neutral-950 border-b-[3px] rounded-lg flex flex-col items-center justify-center text-center group hover:bg-neutral-800 transition-colors cursor-help pb-2"
-                                           style={{ borderBottomColor: '#ffd700' }}
-                                           title="★ Rare Special Item"
-                                      >
-                                           <div className="w-full aspect-square flex flex-col items-center justify-center p-2 mb-2 bg-gradient-to-br from-neutral-800/50 to-neutral-900/50 rounded drop-shadow-sm text-[#ffd700]">
-                                                <span className="text-2xl font-black">★</span>
-                                                <span className="text-xs font-bold mt-2">Rare Item</span>
-                                           </div>
-                                      </div>
-                                  )}
-                                  {contains.map((item: any) => (
-                                       <div 
-                                            key={item.id} 
-                                            className="bg-neutral-950 border-b-[3px] rounded-lg p-2 flex flex-col items-center text-center group hover:bg-neutral-800 transition-colors"
-                                            style={{ borderBottomColor: item.rarity?.color }}
-                                       >
-                                            <div className="w-full aspect-square flex items-center justify-center p-2 mb-2 bg-gradient-to-br from-neutral-800/50 to-neutral-900/50 rounded drop-shadow-sm">
-                                                <img src={steamImg(item.image)} alt={item.name} className="w-full object-contain" loading="lazy" />
+
+                    {!showResult && opening && (
+                        <div className="w-full relative" style={{ height: 196 }}>
+                            {/* Center tick */}
+                            <div
+                                className="absolute top-0 bottom-0 left-1/2 -ml-[1px] w-[2px] z-20"
+                                style={{ background: "#e8edf7", boxShadow: "0 0 10px rgba(232,237,247,0.9)" }}
+                            />
+
+                            {reelItems.length === 0 && (
+                                <div
+                                    className="absolute inset-0 flex items-center justify-center z-30"
+                                    style={{ font: "700 18px Rajdhani, sans-serif", letterSpacing: "0.14em", color: "#5d6678" }}
+                                >
+                                    UNLOCKING…
+                                </div>
+                            )}
+
+                            <div className="uo-reel-mask absolute inset-0">
+                                <div
+                                    className="flex h-full items-center gap-[10px] whitespace-nowrap absolute left-[50%]"
+                                    ref={reelRef}
+                                    style={{ transform: "translateX(0)", willChange: "transform" }}
+                                >
+                                    {reelItems.map((item, index) => {
+                                        const gold = isGoldItem(item);
+                                        const [weapon, skin] = splitName(item.name);
+                                        return (
+                                            <div
+                                                key={index}
+                                                className="uo-rtile w-[150px] h-[150px] flex-shrink-0"
+                                                style={{ borderBottomColor: item.color || item.rarity?.color || "#4b69ff" }}
+                                            >
+                                                {gold ? (
+                                                    <>
+                                                        <div className="uo-rtile-img">
+                                                            <span style={{ font: "700 46px Rajdhani, sans-serif", color: "#ffd700" }}>?</span>
+                                                        </div>
+                                                        <div className="uo-rtile-txt">
+                                                            <span className="uo-rtile-skin">Rare Special Item</span>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="uo-rtile-img">
+                                                            <img src={steamImg(item.image)} alt={item.name} />
+                                                        </div>
+                                                        <div className="uo-rtile-txt">
+                                                            {item.isStatTrak && (
+                                                                <span style={{ font: "700 9px Rajdhani, sans-serif", color: "#f0902a" }}>StatTrak™</span>
+                                                            )}
+                                                            <span className="uo-rtile-weapon">{shortWeapon(weapon) || item.name}</span>
+                                                            {skin && <span className="uo-rtile-skin">{skin}</span>}
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
-                                            <p className="text-[10px] text-neutral-300 line-clamp-2 w-full leading-tight" title={item.name}>{item.name}</p>
-                                       </div>
-                                  ))}
-                             </div>
-                         </div>
-                     )}
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <AnimatePresence>
+                        {showResult && winningItem && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.92 }}
+                                transition={{ type: "spring", bounce: 0.35 }}
+                                className="uo-result relative overflow-hidden px-8 py-8 sm:px-12 flex flex-col items-center text-center w-full max-w-[560px]"
+                            >
+                                <div
+                                    aria-hidden
+                                    style={{
+                                        position: "absolute",
+                                        top: -60,
+                                        width: 320,
+                                        height: 320,
+                                        background: `radial-gradient(ellipse at center, ${winningItem.color || "#5d6678"}30, transparent 65%)`,
+                                    }}
+                                />
+
+                                <motion.img
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ delay: 0.2, type: "spring", bounce: 0.5 }}
+                                    src={steamImg(winningItem.image)}
+                                    alt={winningItem.name}
+                                    className="relative w-44 h-44 object-contain mb-5"
+                                    style={{ filter: "drop-shadow(0 18px 28px rgba(0,0,0,0.55))" }}
+                                />
+
+                                <motion.h2
+                                    initial={{ y: 10, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: 0.3 }}
+                                    className="relative mb-3"
+                                    style={{
+                                        font: "700 30px Rajdhani, sans-serif",
+                                        color: winningItem.color || "#e8edf7",
+                                        letterSpacing: "0.02em",
+                                    }}
+                                >
+                                    {winningItem.name}
+                                </motion.h2>
+
+                                <motion.div
+                                    initial={{ y: 10, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: 0.4 }}
+                                    className="relative flex flex-wrap items-center justify-center gap-2 mb-5"
+                                >
+                                    {winningItem.condition && <span className="uo-chip">{winningItem.condition}</span>}
+                                    {winningItem.float !== null && winningItem.float !== undefined && (
+                                        <span className="uo-chip">Float: {winningItem.float?.toFixed(4)}</span>
+                                    )}
+                                    {winningItem.pattern !== null && winningItem.pattern !== undefined && (
+                                        <span className="uo-chip">Pattern: {winningItem.pattern}</span>
+                                    )}
+                                    {winningItem.phase && <span className="uo-chip" style={{ color: "#9aa3ff" }}>{winningItem.phase}</span>}
+                                    {winningItem.isStatTrak && <span className="uo-chip" style={{ color: "#f0902a" }}>StatTrak™</span>}
+                                </motion.div>
+
+                                <motion.div
+                                    initial={{ y: 10, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: 0.5 }}
+                                    className="relative uo-valuepill mb-6"
+                                >
+                                    <span className="uo-valuepill-label">Value</span>
+                                    <span className="uo-valuepill-value">${winningItem.price.toFixed(2)}</span>
+                                </motion.div>
+
+                                <motion.button
+                                    initial={{ y: 10, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: 0.55 }}
+                                    onClick={handleReset}
+                                    className="uo-btn uo-btn-primary relative"
+                                >
+                                    Continue
+                                </motion.button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
+
+                {/* Items inside the case — preview row */}
+                {!opening && !showResult && (
+                    <div className="uo-items-scroll pb-7">
+                        <div className="uo-items">
+                            {contains.map((item: any) => {
+                                const [weapon, skin] = splitName(item.name);
+                                return (
+                                    <div
+                                        key={item.id}
+                                        className="uo-tile w-[108px] h-[100px]"
+                                        style={{ borderBottomColor: item.rarity?.color || "#4b69ff" }}
+                                        title={item.name}
+                                    >
+                                        <span className="uo-tile-weapon">{shortWeapon(weapon)}</span>
+                                        {skin && <i className="uo-tile-skin">{skin}</i>}
+                                    </div>
+                                );
+                            })}
+                            {crate.contains_rare && crate.contains_rare.length > 0 && (
+                                <div
+                                    className="uo-tile w-[108px] h-[100px]"
+                                    style={{ borderBottomColor: "#ffd700" }}
+                                    title="★ Rare Special Item"
+                                >
+                                    <span className="uo-tile-weapon uo-tile-weapon-gold">?</span>
+                                    <i className="uo-tile-skin">Rare Special Item</i>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Bottom action bar */}
+                {!showResult && (
+                    <div className="uo-bottom px-6 sm:px-[60px] py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="uo-key">
+                            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#c9d1e0" strokeWidth="1.6" aria-hidden="true">
+                                <circle cx="7" cy="7" r="3.5"></circle>
+                                <path d="M9.5 9.5L20 20M15 15l3-3M18 18l2-2"></path>
+                            </svg>
+                            <span>Use {crate.name} key</span>
+                        </div>
+                        <div className="flex gap-[10px]">
+                            <button
+                                onClick={handleOpen}
+                                disabled={opening || !user || user.balance < caseCost}
+                                className="uo-btn uo-btn-primary"
+                            >
+                                {!user ? "Sign in to unlock"
+                                    : user.balance < caseCost ? "Insufficient balance"
+                                    : opening ? "Unlocking…"
+                                    : "Unlock Container"}
+                            </button>
+                            <Link to="/" className="uo-btn uo-btn-ghost">Close</Link>
+                        </div>
+                    </div>
+                )}
             </div>
-        </motion.div>
+        </div>
     );
 }
