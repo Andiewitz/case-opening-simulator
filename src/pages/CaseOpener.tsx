@@ -382,18 +382,21 @@ export default function CaseOpener({ user }: { user: any }) {
                                 return (
                                     <div
                                         key={item.id}
-                                        className="uo-tile w-[108px] h-[100px]"
+                                        className="uo-tile uo-tile-img w-[112px] h-[124px]"
                                         style={{ borderBottomColor: item.rarity?.color || "#4b69ff" }}
                                         title={item.name}
                                     >
-                                        <span className="uo-tile-weapon">{shortWeapon(weapon)}</span>
-                                        {skin && <i className="uo-tile-skin">{skin}</i>}
+                                        <div className="uo-ptile-img">
+                                            <img src={steamImg(item.image)} alt={item.name} loading="lazy" />
+                                        </div>
+                                        <span className="uo-ptile-weapon">{shortWeapon(weapon)}</span>
+                                        {skin && <span className="uo-ptile-skin">{skin}</span>}
                                     </div>
                                 );
                             })}
                             {crate.contains_rare && crate.contains_rare.length > 0 && (
                                 <div
-                                    className="uo-tile w-[108px] h-[100px]"
+                                    className="uo-tile w-[112px] h-[124px]"
                                     style={{ borderBottomColor: "#ffd700" }}
                                     title="★ Rare Special Item"
                                 >

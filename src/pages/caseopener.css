@@ -138,6 +138,56 @@
   white-space: nowrap;
 }
 
+/* Preview tiles with the real item images */
+.uo-tile-img {
+  padding: 4px 4px 3px;
+  justify-content: flex-start;
+  gap: 3px;
+}
+
+.uo-ptile-img {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 2px 2px;
+}
+
+.uo-ptile-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45));
+  transition: transform 0.25s ease;
+}
+
+.uo-tile:hover .uo-ptile-img img {
+  transform: scale(1.06);
+}
+
+.uo-ptile-weapon {
+  font: 700 15px Rajdhani, sans-serif;
+  color: #8b97ab;
+  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uo-ptile-skin {
+  font: 600 9px "Barlow Semi Condensed", sans-serif;
+  color: #aab3c5;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Preview row: centered when it fits, scrolls when it doesn't */
 .uo-items-scroll {
   overflow-x: auto;
