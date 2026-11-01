@@ -7,20 +7,7 @@ resource "aws_cognito_user_pool" "app" {
 
   mfa_configuration = "OFF"
 
-  policies {
-    password_policy {
-      minimum_length        = 8
-      require_lowercase     = true
-      require_numbers       = true
-      require_uppercase     = true
-      require_symbols       = false
-      temporary_password_validity_days = 7
-    }
-  }
-
-  lambda_config = {}
-
-  deletion_protection = false
+  deletion_protection = "INACTIVE"
 
   tags = {
     Name        = "${var.app_name}-user-pool"
@@ -31,6 +18,16 @@ resource "aws_cognito_user_pool" "app" {
 resource "aws_cognito_user_pool_domain" "app" {
   domain       = "${var.app_name}-${var.environment}-${random_id.bucket_suffix.hex}"
   user_pool_id = aws_cognito_user_pool.app.id
+}
+
+locals {
+  # Public origins allowed for auth redirects: Vite dev ports (--port=3000 with
+  # fallback 3001) + `frontend_domain` from terraform.tfvars (e.g. CloudFront
+  # or custom domain) once the distribution is live.
+  auth_origins = compact(concat(
+    ["http://localhost:5173", "http://localhost:3001"],
+    (var.frontend_domain != "" ? ["https://${var.frontend_domain}"] : []),
+  ))
 }
 
 resource "aws_cognito_user_pool_client" "app" {
@@ -55,18 +52,11 @@ resource "aws_cognito_user_pool_client" "app" {
     "ALLOW_REFRESH_TOKEN_AUTH",
   ]
 
-  callback_urls = [
-    "https://${aws_cloudfront_distribution.frontend.domain_name}/",
-  ]
-
-  logout_urls = [
-    "https://${aws_cloudfront_distribution.frontend.domain_name}/",
-  ]
-
-  supported_identity_providers = ["COGNITO"]
-
-  tags = {
-    Name        = "${var.app_name}-client"
-    Environment = var.environment
-  }
+  # Hosted-UI OAuth2 authorization-code flow (src/services/auth.ts)
+  callback_urls                        = [for origin in local.auth_origins : "${origin}/callback"]
+  logout_urls                          = local.auth_origins
+  supported_identity_providers         = ["COGNITO"]
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes                 = ["email", "openid", "profile"]
 }

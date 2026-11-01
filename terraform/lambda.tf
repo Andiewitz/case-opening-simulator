@@ -1,16 +1,16 @@
 data "archive_file" "backend" {
   type        = "zip"
-  source_dir  = "${path.root}/backend/src"
-  output_path = "${path.root}/backend/dist/backend.zip"
+  source_dir  = "${path.root}/../backend/dist"
+  output_path = "${path.root}/../backend/dist/backend.zip"
 }
 
 locals {
   handlers = {
-    getCrates     = "src/handlers/getCrates.handler"
-    openCase      = "src/handlers/openCase.handler"
-    sellItem      = "src/handlers/sellItem.handler"
-    getUser       = "src/handlers/getUser.handler"
-    getInventory  = "src/handlers/getInventory.handler"
+    getCrates     = "getCrates.handler"
+    openCase      = "openCase.handler"
+    sellItem      = "sellItem.handler"
+    getUser       = "getUser.handler"
+    getInventory  = "getInventory.handler"
   }
 }
 

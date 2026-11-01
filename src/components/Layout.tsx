@@ -2,9 +2,11 @@ import { Outlet, Link } from "react-router-dom";
 import { PackageOpen, LayoutGrid, Menu } from "lucide-react";
 import { useState } from "react";
 import { signIn, signOut } from "../services/auth";
+import AuthModal from "./AuthModal";
 
 export default function Layout({ user }: { user: any }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans selection:bg-rose-500/30">
@@ -50,7 +52,7 @@ export default function Layout({ user }: { user: any }) {
               </>
             ) : (
               <button
-                onClick={signIn}
+                onClick={() => setAuthOpen(true)}
                 className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-full text-sm font-medium hover:bg-neutral-200 transition-colors"
               >
                 Sign In
@@ -81,6 +83,8 @@ export default function Layout({ user }: { user: any }) {
       <main className="max-w-7xl mx-auto px-4 py-8">
         <Outlet />
       </main>
+
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
     </div>
   );
 }

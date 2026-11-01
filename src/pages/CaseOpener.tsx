@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { getCrates, openCase } from "../services/api";
-import { getAccessToken } from "../services/auth";
+import { getValidAccessToken } from "../services/auth";
 import { ChevronLeft } from "lucide-react";
 import * as React from "react"; 
 import { playReveal, playSell, preloadCaseOpenSound, playCaseOpenSound, getCaseOpenDuration, stopCaseOpenSound } from "../lib/sounds";
@@ -55,7 +55,7 @@ export default function CaseOpener({ user }: { user: any }) {
         }
         
         try {
-            const token = getAccessToken();
+            const token = await getValidAccessToken();
             // 1. Server generates the roll, deducts balance, and saves the item atomically
             const savedItem = await openCase(crate.id, token);
             if (!savedItem) {

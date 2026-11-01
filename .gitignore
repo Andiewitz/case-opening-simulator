@@ -12,3 +12,4 @@ coverage/
 *.tfstate.backup
 tfplan
 .terraform.lock.hcl
+backend/amplify-deploy.zip

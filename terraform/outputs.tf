@@ -24,7 +24,7 @@ output "cloudfront_url" {
 }
 
 output "api_gateway_invoke_url" {
-  value       = "https://${aws_api_gateway_rest_api.api.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_api_gateway_stage.api.stage_name}"
+  value       = "https://${aws_api_gateway_rest_api.api.id}.execute-api.${var.aws_region}.amazonaws.com/${var.environment}"
   description = "Base invoke URL for the API Gateway REST API"
 }
 

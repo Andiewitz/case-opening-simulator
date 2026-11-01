@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getInventory, sellItem } from "../services/api";
-import { getAccessToken } from "../services/auth";
+import { getValidAccessToken } from "../services/auth";
 import { motion, AnimatePresence } from "motion/react";
 
 import { playSell } from "../lib/sounds";
@@ -14,7 +14,7 @@ export default function Inventory({ user }: { user: any }) {
         if (!user) return;
         let mounted = true;
         const load = async () => {
-            const token = getAccessToken();
+            const token = await getValidAccessToken();
             try {
                 const data = await getInventory(user.id, token);
                 if (mounted) setItems(data);
@@ -32,7 +32,7 @@ export default function Inventory({ user }: { user: any }) {
         if (!user || selling) return;
         setSelling(true);
         try {
-            const token = getAccessToken();
+            const token = await getValidAccessToken();
             await sellItem(itemId, price, token);
             playSell();
             const data = await getInventory(user.id, token);
@@ -50,7 +50,7 @@ export default function Inventory({ user }: { user: any }) {
         
         setSelling(true);
         try {
-            const token = getAccessToken();
+            const token = await getValidAccessToken();
             for(const item of items) {
                 await sellItem(item.id, item.price, token);
             }

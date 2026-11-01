@@ -6,7 +6,7 @@ import { CASE_COST } from "../config";
 export const handler = async (event: any): Promise<any> => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: corsHeaders, body: "" };
 
-  const auth = requireAuth(event.headers);
+  const auth = await requireAuth(event.headers);
   if ("statusCode" in auth) return json(auth.statusCode, JSON.parse(auth.body));
   const { userId } = auth;
 

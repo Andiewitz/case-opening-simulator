@@ -3,6 +3,45 @@ resource "aws_api_gateway_rest_api" "api" {
   description = "CS2 Unboxed serverless API"
 }
 
+# ---- CORS preflight (OPTIONS) ----
+# Browsers preflight cross-origin requests that carry Content-Type/Authorization.
+# Every handler answers OPTIONS itself with the shared CORS headers, so these
+# integrations reuse each route's own Lambda (AWS_PROXY).
+locals {
+  preflight_routes = {
+    crates            = aws_api_gateway_resource.crates.id
+    cases_open        = aws_api_gateway_resource.cases_open.id
+    inventory_sell    = aws_api_gateway_resource.inventory_sell.id
+    users_id          = aws_api_gateway_resource.users_userid.id
+    users_id_inventory = aws_api_gateway_resource.users_userid_inventory.id
+  }
+  preflight_lambda = {
+    crates             = "getCrates"
+    cases_open         = "openCase"
+    inventory_sell     = "sellItem"
+    users_id           = "getUser"
+    users_id_inventory = "getInventory"
+  }
+}
+
+resource "aws_api_gateway_method" "options" {
+  for_each      = local.preflight_routes
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = each.value
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options" {
+  for_each                = local.preflight_routes
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = each.value
+  http_method             = aws_api_gateway_method.options[each.key].http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.handlers[local.preflight_lambda[each.key]].invoke_arn
+}
+
 # ---- /crates (GET) ----
 resource "aws_api_gateway_resource" "crates" {
   rest_api_id = aws_api_gateway_rest_api.api.id
@@ -173,17 +212,11 @@ resource "aws_api_gateway_method_response" "users_userid_inventory_get_200" {
 
 # ---- Lambda invoke permissions for API Gateway ----
 resource "aws_lambda_permission" "apigw" {
-  for_each = {
-    getCrates     = aws_api_gateway_integration.crates_get
-    openCase      = aws_api_gateway_integration.cases_open_post
-    sellItem      = aws_api_gateway_integration.inventory_sell_post
-    getUser       = aws_api_gateway_integration.users_userid_get
-    getInventory  = aws_api_gateway_integration.users_userid_inventory_get
-  }
+  for_each = local.handlers
 
   statement_id  = "AllowAPIGatewayInvoke-${each.key}"
   action        = "lambda:InvokeFunction"
-  function      = aws_lambda_function.handlers[each.key].arn
+  function_name = aws_lambda_function.handlers[each.key].function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
 }
@@ -191,7 +224,6 @@ resource "aws_lambda_permission" "apigw" {
 # ---- Deployment + stage ----
 resource "aws_api_gateway_deployment" "api" {
   rest_api_id = aws_api_gateway_rest_api.api.id
-  stage_name  = var.environment
 
   triggers = {
     redeploy = sha256(jsonencode([
@@ -200,12 +232,23 @@ resource "aws_api_gateway_deployment" "api" {
       aws_api_gateway_integration.inventory_sell_post.id,
       aws_api_gateway_integration.users_userid_get.id,
       aws_api_gateway_integration.users_userid_inventory_get.id,
+      aws_api_gateway_integration.options["crates"],
+      aws_api_gateway_integration.options["cases_open"],
+      aws_api_gateway_integration.options["inventory_sell"],
+      aws_api_gateway_integration.options["users_id"],
+      aws_api_gateway_integration.options["users_id_inventory"],
     ]))
+  }
+
+  # Stages pin their deployment; create the replacement (and move the stage to
+  # it) before destroying the old snapshot.
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
 resource "aws_api_gateway_stage" "api" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  stage_name  = aws_api_gateway_deployment.api.stage_name
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  stage_name    = var.environment
   deployment_id = aws_api_gateway_deployment.api.id
 }

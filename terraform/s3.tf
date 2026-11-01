@@ -2,6 +2,44 @@ resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
+# TEMPORARY: serve the site straight from the S3 website endpoint (HTTP) while
+# the account waits for CloudFront verification. Cognito only allows https
+# callback URLs (except localhost), so sign-in is disabled on the S3 site;
+# the full flow works at CloudFront (or npm run dev). Flip this to false once
+# the CloudFront distribution is serving.
+variable "public_website_interim" {
+  description = "Public-read S3 website endpoint for the frontend while CloudFront is pending."
+  type        = bool
+  default     = true
+}
+
+locals {
+  frontend_bucket_statements = concat(
+    [
+      {
+        Sid       = "AllowCloudFrontOAC"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.frontend.arn}/*"
+      },
+    ],
+    var.public_website_interim ? [
+      {
+        Sid       = "PublicReadWebsiteInterim"
+        Effect    = "Allow"
+        Principal = {
+          AWS = "*"
+        }
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.frontend.arn}/*"
+      },
+    ] : [],
+  )
+}
+
 resource "aws_s3_bucket" "frontend" {
   bucket = "${var.app_name}-frontend-${random_id.bucket_suffix.hex}"
 
@@ -11,13 +49,28 @@ resource "aws_s3_bucket" "frontend" {
   }
 }
 
+# Relaxed while the S3 website endpoint serves the site; restores CF-only
+# access when public_website_interim = false.
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  block_public_acls       = !var.public_website_interim
+  block_public_policy     = !var.public_website_interim
+  ignore_public_acls      = !var.public_website_interim
+  restrict_public_buckets = !var.public_website_interim
+}
+
+resource "aws_s3_bucket_website_configuration" "frontend" {
+  count = var.public_website_interim ? 1 : 0
+  bucket = aws_s3_bucket.frontend.id
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "index.html"
+  }
 }
 
 resource "aws_s3_bucket_ownership_controls" "frontend" {
@@ -40,18 +93,11 @@ resource "aws_s3_bucket_policy" "frontend_cloudfront" {
   bucket = aws_s3_bucket.frontend.id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "AllowCloudFrontOAC"
-        Effect    = "Allow"
-        Principal = {
-          Service = "cloudfront.amazonaws.com"
-        }
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.frontend.arn}/*"
-      }
-    ]
+    Statement = local.frontend_bucket_statements
   })
+
+  # Public-read policy is only accepted after the block switch above relaxes.
+  depends_on = [aws_s3_bucket_public_access_block.frontend]
 }
 
 resource "aws_cloudfront_distribution" "frontend" {
