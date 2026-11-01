@@ -81,7 +81,18 @@ resource "aws_s3_bucket_ownership_controls" "frontend" {
   }
 }
 
+# CloudFront is gated behind `enable_cloudfront` (default false) because the
+# account is not verified for CloudFront yet. Amplify Hosting serves the
+# frontend meanwhile; flip the switch after account verification clears
+# (see docs/aws-cloudfront-verification.md).
+variable "enable_cloudfront" {
+  description = "Create the CloudFront distribution for the frontend (requires AWS account verification for CloudFront)."
+  type        = bool
+  default     = false
+}
+
 resource "aws_cloudfront_origin_access_control" "frontend" {
+  count                       = var.enable_cloudfront ? 1 : 0
   name                        = "${var.app_name}-frontend-oac"
   description                 = "OAC for ${var.app_name} frontend S3 origin"
   origin_access_control_origin_type = "s3"
@@ -101,11 +112,13 @@ resource "aws_s3_bucket_policy" "frontend_cloudfront" {
 }
 
 resource "aws_cloudfront_distribution" "frontend" {
+  count = var.enable_cloudfront ? 1 : 0
+
   origin {
     domain_name = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id   = "S3-${aws_s3_bucket.frontend.id}"
 
-    origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
+    origin_access_control_id = aws_cloudfront_origin_access_control.frontend[0].id
 
     s3_origin_config {
       origin_access_identity = ""

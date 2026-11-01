@@ -8,19 +8,27 @@ output "frontend_bucket_regional_domain" {
   description = "S3 regional domain name of the frontend bucket"
 }
 
+# CloudFront outputs resolve only when enable_cloudfront = true; otherwise
+# the frontend is served by Amplify (see output "amplify_default_domain").
+
 output "cloudfront_domain_name" {
-  value       = aws_cloudfront_distribution.frontend.domain_name
+  value       = var.enable_cloudfront ? aws_cloudfront_distribution.frontend[0].domain_name : null
   description = "CloudFront domain name for the frontend"
 }
 
 output "cloudfront_distribution_id" {
-  value       = aws_cloudfront_distribution.frontend.id
+  value       = var.enable_cloudfront ? aws_cloudfront_distribution.frontend[0].id : null
   description = "CloudFront distribution ID (for invalidation)"
 }
 
 output "cloudfront_url" {
-  value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+  value       = var.enable_cloudfront ? "https://${aws_cloudfront_distribution.frontend[0].domain_name}" : null
   description = "HTTPS URL of the frontend"
+}
+
+output "amplify_default_domain" {
+  value       = "https://${aws_amplify_branch.main.branch_name}.${aws_amplify_app.frontend.default_domain}"
+  description = "Live HTTPS URL of the frontend on Amplify Hosting"
 }
 
 output "api_gateway_invoke_url" {

@@ -3,3 +3,7 @@
 # CloudFront account-verification support case is pending).
 # When CloudFront is live, point this at the distribution domain instead.
 frontend_domain = "main.d2mrjtz68yn4c6.amplifyapp.com"
+
+# CloudFront stays off until the AWS account-verification clears
+# (docs/aws-cloudfront-verification.md). Amplify serves the frontend.
+enable_cloudfront = false

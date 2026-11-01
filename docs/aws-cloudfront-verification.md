@@ -1,7 +1,26 @@
-# CloudFront account verification — the one manual step
+# CloudFront (optional) — Amplify is the frontend of record
 
-The Terraform stack includes an `aws_cloudfront_distribution` for the frontend
-(HTTPS + Terraform-managed hosting). Creating it currently fails with:
+**Status: fully operational without CloudFront.** The frontend is served by
+AWS Amplify Hosting with a free, AWS-managed TLS certificate:
+
+- Live URL: https://main.d2mrjtz68yn4c6.amplifyapp.com
+- Infrastructure: `terraform/amplify.tf` (app + branch + rewrite rules —
+  the app itself is Terraform-managed; deploys are manual zip uploads)
+
+## The CloudFront switch
+
+`terraform/s3.tf` still contains the CloudFront distribution for the S3
+origin, gated behind a variable:
+
+```hcl
+# terraform.tfvars
+enable_cloudfront = false
+```
+
+With `false` (current), full `terraform apply` works cleanly and the S3
+bucket serves nothing publicly except the interim website mode.
+
+**CloudFront creation is blocked by an AWS account-level gate:**
 
 ```
 AccessDenied: Your account must be verified before you can add new CloudFront
@@ -9,20 +28,13 @@ resources. To verify your account, please contact AWS Support
 (https://console.aws.amazon.com/support/home#/) and include this error message.
 ```
 
-This is an AWS account-level gate. **Only the account root user can file the
-unblock request.** Until it clears, the frontend is served by AWS Amplify
-Hosting at https://main.d2mrjtz68yn4c6.amplifyapp.com/ (HTTPS works fine there).
+Only the account root user can file the unblock request — and it is entirely
+optional. File it only if you want the Terraform-managed CloudFront path.
 
-## How to file it (~3 minutes)
+## If you ever file it (~3 min, root only)
 
-1. Sign in to the AWS console as **root** (account `499867322589`)
-2. Go to https://console.aws.amazon.com/support/home#/ → **Create case**
-3. Choose:
-   - **Account and billing**
-   - Service: **Account**
-   - Category: **Account verification** (or "Other account issues")
-   - Severity: **General guidance** / low
-4. Subject + description — paste this:
+Create a case: **Account and billing → Account → Account verification**
+and paste:
 
 ```
 Subject: Please verify account for CloudFront new-resource access
@@ -39,39 +51,21 @@ My account (499867322589) is blocked from creating CloudFront resources:
 Operation: CreateDistributionWithTags
 Region: us-east-1
 Request ID: 303c0e20-f070-4621-972b-afccac4bd630
-Error occurred: 2026-11-01 (via Terraform / AWS CLI)
 
-I am hosting a personal static website (React SPA + API Gateway/Lambda
-backend) for my own use and would like to serve it via CloudFront with
-HTTPS. No marketing or high-volume traffic is involved.
-
-Could you please verify the account and lift the CloudFront restriction?
+Could you please verify the account and lift the restriction?
 
 Thank you!
 ```
 
-5. Submit. AWS usually answers within 1-2 business days.
+## After approval
 
-## After it's cleared
+1. Flip `enable_cloudfront = true` in `terraform.tfvars`, then:
+   `cd terraform && AWS_PROFILE=tf terraform apply`
+2. Serve the frontend from S3 + CloudFront (sync `dist/` to the bucket,
+   invalidate) instead of Amplify, point `frontend_domain` at the
+   CloudFront domain, and re-apply the Cognito client.
+3. `public_website_interim = false` to turn the HTTP S3 website off.
+4. Optionally delete the Amplify app.
 
-Run the full (untargeted) Terraform apply — it will create the distribution:
-
-```bash
-cd terraform && AWS_PROFILE=tf terraform apply
-```
-
-Then flip the interim S3 public-website mode off in `terraform.tfvars`:
-
-```hcl
-public_website_interim = false
-```
-
-and apply again. Optionally point `frontend_domain` at the CloudFront domain
-(`dxxxxxx.cloudfront.net`) so Cognito callbacks match, then redeploy the
-frontend bundle from `dist/` with that origin.
-
-## Current interim state (works fine, HTTPS included)
-
-- Frontend: https://main.d2mrjtz68yn4c6.amplifyapp.com/ (Amplify, auto-TLS)
-- API: https://7h7i5bb7o3.execute-api.us-east-1.amazonaws.com/dev
-- Fallback (HTTP only): the S3 website endpoint
+**None of this is required for the app to work — it exists only for having
+the frontend served through the Terraform-native CloudFront path.**
