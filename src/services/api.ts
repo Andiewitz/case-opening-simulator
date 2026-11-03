@@ -6,10 +6,13 @@ function headers(accessToken: string | null): Record<string, string> {
   return h;
 }
 
-async function request(path: string, opts: RequestInit = {}): Promise<any> {
+type ApiRequestInit = RequestInit & { accessToken?: string | null };
+
+async function request(path: string, opts: ApiRequestInit = {}): Promise<any> {
+  const { accessToken = null, ...init } = opts;
   const res = await fetch(`${API_BASE}${path}`, {
-    ...opts,
-    headers: { ...headers(opts.accessToken as string | null), ...opts.headers },
+    ...init,
+    headers: { ...headers(accessToken), ...init.headers },
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");

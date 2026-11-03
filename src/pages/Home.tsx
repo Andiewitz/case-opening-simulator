@@ -1,94 +1,141 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useOutletContext } from "react-router-dom";
 import { getCrates } from "../services/api";
-import { motion } from "motion/react";
 import { steamImg } from "../lib/steam";
+import type { LayoutContext } from "../components/Layout";
 
-export default function Home({ user }: { user: any }) {
-    const [crates, setCrates] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+const CASE_COST = 2.5;
 
-    useEffect(() => {
-        getCrates().then(data => {
-            setCrates(data);
-            setLoading(false);
-        }).catch(err => {
-            console.error(err);
-            setLoading(false);
-        });
-    }, []);
+/** A rotation of classic CS rarity colors — gives the wall of cases the
+ *  same varied accent spines as the design mock. */
+const CARD_TONES = ["#f0902a", "#eb4b4b", "#4b69ff", "#8847ff", "#e7b13a", "#d32ce6"];
 
-    if (loading) return (
-        <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
+type Filter = "everything" | "cases" | "capsules";
+
+const TABS: { id: Filter; label: string }[] = [
+    { id: "everything", label: "Everything" },
+    { id: "cases", label: "Cases" },
+    { id: "capsules", label: "Capsules" },
+];
+
+function SkeletonGrid() {
+    return (
+        <div className="uo-grid" aria-hidden="true">
+            {Array.from({ length: 12 }).map((_, i) => (
+                <div className="uo-skel-card" key={i}>
+                    <div className="uo-skel-art" />
+                    <div className="uo-skel-line" />
+                    <div className="uo-skel-price" />
+                </div>
+            ))}
         </div>
     );
+}
+
+export default function Home({ user }: { user: any }) {
+    const { openAuth } = useOutletContext<LayoutContext>();
+    const [crates, setCrates] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [filter, setFilter] = useState<Filter>("everything");
+
+    const load = () => {
+        setLoading(true);
+        setError(null);
+        getCrates()
+            .then((data) => {
+                setCrates(data.map((crate: any, i: number) => ({
+                    ...crate,
+                    tone: CARD_TONES[i % CARD_TONES.length],
+                })));
+            })
+            .catch((err) => {
+                console.error(err);
+                setError("Couldn't load the cases feed. Check your connection and try again.");
+            })
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(load, []);
+
+    const visible = useMemo(() => {
+        if (filter === "cases") return crates.filter((c) => c.type === "Case");
+        if (filter === "capsules") return crates.filter((c) => c.type !== "Case");
+        return crates;
+    }, [crates, filter]);
 
     return (
-        <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="space-y-8"
-        >
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-white mb-2">CS:GO / CS2 Cases & Capsules</h1>
-                    <p className="text-neutral-400">Open cases and capsules safely with virtual balance. No real money required.</p>
-                </div>
-                {user && (
-                    <div className="flex items-center gap-2 bg-neutral-800/50 rounded-full py-1 px-3 border border-neutral-700/50">
-                        <span className="font-mono text-sm font-bold text-amber-50">${user.balance?.toFixed(2)}</span>
-                    </div>
-                )}
+        <div className="uo-page">
+            <div className="uo-page-head">
+                <h1 className="uo-title">Cases &amp; Capsules</h1>
+                <p className="uo-sub">
+                    Open cases and capsules with your virtual balance. No real money required.
+                </p>
             </div>
 
             {!user && (
-                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 text-rose-200">
-                    Sign in to open cases and manage your inventory.
+                <div className="uo-notice">
+                    <span>Sign in to open cases and keep your pulls in your inventory.</span>
+                    <button className="uo-link-btn" onClick={openAuth}>Sign In</button>
                 </div>
             )}
 
-            <motion.div 
-                initial="hidden"
-                animate="show"
-                variants={{
-                    hidden: { opacity: 0 },
-                    show: {
-                        opacity: 1,
-                        transition: { staggerChildren: 0.05 }
-                    }
-                }}
-                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
-            >
-                {crates.map(crate => (
-                    <motion.div
-                        key={crate.id}
-                        variants={{
-                            hidden: { opacity: 0, scale: 0.9 },
-                            show: { opacity: 1, scale: 1, transition: { type: "spring", bounce: 0.4 } }
-                        }}
+            <div className="uo-tabs" role="tablist" aria-label="Filter containers">
+                {TABS.map((tab) => (
+                    <button
+                        key={tab.id}
+                        role="tab"
+                        aria-selected={filter === tab.id}
+                        className={"uo-tab" + (filter === tab.id ? " is-active" : "")}
+                        onClick={() => setFilter(tab.id)}
                     >
-                        <Link 
-                            to={`/case/${crate.id}`}
-                            className="group bg-neutral-900 border border-neutral-800 hover:border-rose-500/50 rounded-xl p-4 transition-all hover:bg-neutral-800/80 flex flex-col items-center gap-4 hover:-translate-y-1 block"
-                        >
-                            <div className="w-full aspect-square bg-gradient-to-br from-neutral-800 to-neutral-900 rounded-lg p-2 flex items-center justify-center relative overflow-hidden group-hover:shadow-[0_0_20px_rgba(244,63,94,0.15)] transition-shadow">
-                                <img 
-                                    src={steamImg(crate.image)} 
-                                    alt={crate.name} 
-                                    className="w-full object-contain group-hover:scale-110 transition-transform duration-500" 
-                                    loading="lazy"
-                                />
-                            </div>
-                            <div className="text-center w-full">
-                                <h3 className="font-medium text-sm text-neutral-200 line-clamp-2" title={crate.name}>{crate.name}</h3>
-                                <p className="text-xs font-mono text-emerald-400 mt-2 font-bold bg-emerald-400/10 inline-block px-2 py-0.5 rounded-full">$2.50</p>
-                            </div>
-                        </Link>
-                    </motion.div>
+                        {tab.label}
+                    </button>
                 ))}
-            </motion.div>
-        </motion.div>
+            </div>
+
+            {loading && <SkeletonGrid />}
+
+            {!loading && error && (
+                <div className="uo-error">
+                    {error}{" "}
+                    <button className="uo-link-btn" onClick={load}>Retry</button>
+                </div>
+            )}
+
+            {!loading && !error && (
+                <>
+                    <div className="uo-grid uo-fade" key={filter}>
+                        {visible.map((crate) => (
+                            <Link
+                                key={crate.id}
+                                to={`/case/${crate.id}`}
+                                className="uo-card"
+                                style={{ borderBottomColor: crate.tone }}
+                                title={crate.name}
+                            >
+                                <div className="uo-card-art">
+                                    <img
+                                        src={steamImg(crate.image)}
+                                        alt=""
+                                        loading="lazy"
+                                        decoding="async"
+                                    />
+                                </div>
+                                <span className="uo-card-name">{crate.name}</span>
+                                <span className="uo-card-price">${CASE_COST.toFixed(2)}</span>
+                            </Link>
+                        ))}
+                    </div>
+
+                    {visible.length === 0 && (
+                        <div className="uo-empty">
+                            <strong>Nothing here yet</strong>
+                            Try another filter.
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
     );
 }

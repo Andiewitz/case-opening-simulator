@@ -38,7 +38,12 @@ export default function App() {
   }, []);
 
   if (loading) {
-    return <div className="min-h-screen bg-neutral-950 flex items-center justify-center text-white">Loading...</div>;
+    return (
+      <div className="uo-screen flex items-center justify-center">
+        <div className="uo-bg" aria-hidden="true" />
+        <div className="animate-spin rounded-full h-8 w-8" style={{ border: "2px solid #2c3445", borderBottomColor: "#3be83b" }}></div>
+      </div>
+    );
   }
 
   return (

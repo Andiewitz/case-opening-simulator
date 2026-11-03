@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { getCrates, openCase } from "../services/api";
-import { getValidAccessToken } from "../services/auth";
+import { getValidAccessToken, refreshProfile } from "../services/auth";
 import { playReveal, preloadCaseOpenSound, playCaseOpenSound, getCaseOpenDuration, stopCaseOpenSound } from "../lib/sounds";
 import { steamImg } from "../lib/steam";
 import { motion, AnimatePresence } from "motion/react";
@@ -107,6 +107,7 @@ export default function CaseOpener({ user }: { user: any }) {
             }
             setReelItems(items);
             setWinningItem(savedItem); // Store real ID item
+            refreshProfile(); // header balance now reflects the open
 
             // 4. Force DOM repaint then CSS spin
             requestAnimationFrame(() => {
@@ -169,13 +170,13 @@ export default function CaseOpener({ user }: { user: any }) {
     };
 
     if (loading) return (
-        <div className="uo-screen -mx-4 -my-8 flex items-center justify-center" style={{ minHeight: "calc(100vh - 64px)" }}>
+        <div className="flex items-center justify-center" style={{ minHeight: "calc(100vh - 56px)" }}>
             <div className="animate-spin rounded-full h-8 w-8" style={{ border: "2px solid #2c3445", borderBottomColor: "#3be83b" }}></div>
         </div>
     );
 
     if (!crate) return (
-        <div className="uo-screen -mx-4 -my-8 flex flex-col items-center justify-center gap-4" style={{ minHeight: "calc(100vh - 64px)" }}>
+        <div className="flex flex-col items-center justify-center gap-4" style={{ minHeight: "calc(100vh - 56px)" }}>
             <div className="uo-title" style={{ fontSize: 24 }}>Case not found</div>
             <Link to="/" className="uo-backlink">‹ Back to Cases</Link>
         </div>
@@ -186,13 +187,11 @@ export default function CaseOpener({ user }: { user: any }) {
         item.color === "#ffd700" || item.rarity === "Rare Special Item" || item.name === "★ Rare Special Item ★";
 
     return (
-        <div className="uo-screen relative -mx-4 -my-8 overflow-hidden" style={{ minHeight: "calc(100vh - 64px)" }}>
-            <div className="uo-vignette" />
-
-            <div className="relative z-10 flex flex-col" style={{ minHeight: "calc(100vh - 64px)" }}>
+        <div className="relative overflow-hidden" style={{ minHeight: "calc(100vh - 56px)" }}>
+            <div className="relative z-10 flex flex-col" style={{ minHeight: "calc(100vh - 56px)" }}>
                 {/* Title block */}
                 <div className="relative text-center px-4 pt-7 sm:pt-9">
-                    <Link to="/" className="uo-backlink absolute left-4 sm:left-8 top-7 sm:top-9">‹ Cases</Link>
+                    <Link to="/" className="uo-backlink uo-backlink-corner absolute left-4 sm:left-8 top-7 sm:top-9">‹ Cases</Link>
                     <h1 className="uo-title">Unlock Container</h1>
                     <div className="uo-sub mt-1">Unlock <b>{crate.name}</b></div>
                     <div className="uo-note">${caseCost.toFixed(2)} per open · items go straight to your inventory</div>

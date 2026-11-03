@@ -63,6 +63,11 @@ export async function signOut(): Promise<void> {
   window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 
+/** Ask the app shell to re-read the user profile (balance/stats) from the API. */
+export function refreshProfile(): void {
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+}
+
 export function getCurrentUser(): any | null {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);

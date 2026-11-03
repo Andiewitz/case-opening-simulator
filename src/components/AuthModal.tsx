@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import { signInWithPassword, signUp, confirmSignUp } from "../services/auth";
 
@@ -15,7 +15,7 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
 
   if (!open) return null;
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy) return;
     setBusy(true);
@@ -44,24 +44,24 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-2xl">
+      <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+      <div className="uo-modal">
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 p-1.5 rounded-full text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"
+          className="uo-icon-btn absolute right-3 top-3"
           aria-label="Close dialog"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <h2 className="text-xl font-bold text-white">{title}</h2>
-        <p className="mt-1 text-sm text-neutral-400">
+        <h2 className="uo-modal-title">{title}</h2>
+        <p className="uo-modal-sub">
           {mode === "signin" && "Sign in to open cases and manage your inventory."}
           {mode === "signup" && "Virtual balance only. No real money required."}
           {mode === "confirm" && "Enter the code we emailed to " + email.trim() + "."}
         </p>
 
-        <form onSubmit={submit} className="mt-5 space-y-3">
+        <form onSubmit={submit} className="uo-form">
           {mode !== "confirm" && (
             <input
               type="email"
@@ -70,7 +70,7 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:border-rose-500/60 focus:outline-none"
+              className="uo-field"
             />
           )}
           {mode !== "confirm" && (
@@ -81,7 +81,7 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:border-rose-500/60 focus:outline-none"
+              className="uo-field"
             />
           )}
           {mode === "confirm" && (
@@ -92,34 +92,28 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
               placeholder="Confirmation code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:border-rose-500/60 focus:outline-none"
+              className="uo-field"
             />
           )}
 
           {error && (
-            <p className={"text-xs rounded-lg px-3 py-2 " + (error.startsWith("Check your email")
-              ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
-              : "bg-red-500/10 text-red-300 border border-red-500/20")}>
+            <p className={"uo-form-msg " + (error.startsWith("Check your email") ? "is-ok" : "is-error")}>
               {error}
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-400 disabled:opacity-50 transition-colors"
-          >
+          <button type="submit" disabled={busy} className="uo-btn uo-btn-primary uo-btn-block">
             {busy ? "Working…" : mode === "signin" ? "Sign In" : mode === "signup" ? "Create Account" : "Confirm & Sign In"}
           </button>
         </form>
 
-        <div className="mt-4 text-center text-xs text-neutral-500">
+        <div className="uo-modal-note">
           {mode === "signin" ? (
-            <button onClick={() => { setMode("signup"); setError(null); }} className="hover:text-neutral-300 underline-offset-2 hover:underline">
+            <button onClick={() => { setMode("signup"); setError(null); }}>
               No account yet? Create one
             </button>
           ) : (
-            <button onClick={() => { setMode("signin"); setError(null); }} className="hover:text-neutral-300 underline-offset-2 hover:underline">
+            <button onClick={() => { setMode("signin"); setError(null); }}>
               Back to sign in
             </button>
           )}
