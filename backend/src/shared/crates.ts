@@ -1,80 +1,109 @@
-import { gzipSync } from "node:zlib";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { CSGO_API_BASE } from "../config";
+import { projectCrates } from "./cratesData";
+
+/**
+ * The upstream crates feed is a multi-megabyte JSON download from GitHub.
+ * Fetching it at runtime made every cold Lambda container (and every warm
+ * container after the old 10-minute cache expired) take 2–4 seconds.
+ *
+ * The fix is to bake the projected feed into the deployment artifact at
+ * build time (see scripts/bake-crates.ts). At runtime we only read a ~1 MB
+ * gzip file from the Lambda package and parse it once. No network fetch and
+ * no TTL. The GitHub path remains only as a development/missing-artifact
+ * fallback.
+ */
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
-let cache: { ts: number; crates: any[] } | null = null;
+// Lambda runs with cwd=/var/task and the build copies crates.json.gz there.
+// The other paths make local tsx/dev execution work from the repo root or
+// from the backend directory.
+const BAKED_CANDIDATES = [
+  resolve(process.cwd(), "crates.json.gz"),
+  resolve(process.cwd(), "backend/src/shared/crates.json.gz"),
+  resolve(process.cwd(), "src/shared/crates.json.gz"),
+];
 
-// Pre-baked response (JSON string gzipped) — repeated requests skip the
-// expensive stringify/gzip cycle entirely.
-let baked: { gzipB64: string; cratedAt: number } | null = null;
+let bakedPath: string | null | undefined;
+let bakedGzipB64: string | null = null;
+let bakedCrates: any[] | null = null;
+let fallbackCache: { ts: number; crates: any[] } | null = null;
+let warnedFallback = false;
 
-/**
- * The upstream crates feed is ~5 MB of JSON from GitHub. Downloading and
- * parsing it on every request was the dominant latency of the whole app
- * (~5-8 s per request, warm or cold). We instead:
- *   1. cache the parsed + projected dataset in Lambda memory for 10 minutes
- *      (warm containers serve it instantly, openCase included), and
- *   2. project each item down to the fields the app actually uses
- *      (id, name, image, rarity{id,name,color}) — the full feed is ~5 MB,
- *      the projection is ~10x smaller.
- */
-function projectItem(i: any) {
-  return {
-    id: i.id,
-    name: i.name,
-    // Compact Steam CDN hash — the full ~250-char URL prefix would add
-    // megabytes across 281 cases; clients rebuild it via src/lib/steam.ts.
-    image: i.image ? i.image.replace("https://community.akamai.steamstatic.com/economy/image/", "") : i.image,
-    rarity: i.rarity ? { id: i.rarity.id, name: i.rarity.name, color: i.rarity.color } : undefined,
-    phase: i.phase,
-  };
+function findBakedPath(): string | null {
+  if (bakedPath === undefined) {
+    bakedPath = BAKED_CANDIDATES.find((candidate) => existsSync(candidate)) || null;
+  }
+  return bakedPath;
 }
 
-function projectCrate(c: any) {
-  return {
-    id: c.id,
-    name: c.name,
-    type: c.type,
-    image: c.image,
-    contains: (c.contains || []).map(projectItem),
-    contains_rare: (c.contains_rare || []).map(projectItem),
-  };
+function readBakedGzip(): Buffer {
+  const path = findBakedPath();
+  if (!path) throw new Error("Baked crates snapshot not found");
+  return readFileSync(path);
+}
+
+function getBakedCrates(): any[] {
+  if (!bakedCrates) {
+    const parsed = JSON.parse(gunzipSync(readBakedGzip()).toString("utf8")) as any[];
+    bakedCrates = parsed;
+    return parsed;
+  }
+  return bakedCrates;
+}
+
+function warnFallback(): void {
+  if (warnedFallback) return;
+  warnedFallback = true;
+  console.warn("[crates] Baked snapshot unavailable; falling back to upstream GitHub feed");
+}
+
+async function fetchUpstreamCrates(): Promise<any[]> {
+  const res = await fetch(`${CSGO_API_BASE}/crates.json`);
+  if (!res.ok) throw new Error(`Crates feed returned HTTP ${res.status}`);
+  const data = await res.json();
+  return projectCrates(data);
 }
 
 export async function loadCrates(): Promise<any[]> {
-  if (cache && Date.now() - cache.ts < CACHE_TTL_MS) {
-    return cache.crates;
+  try {
+    return getBakedCrates();
+  } catch {
+    // Development fallback / packaging safety net. Production should always
+    // hit the baked snapshot above.
+    warnFallback();
   }
-  const res = await fetch(`${CSGO_API_BASE}/crates.json`);
-  const data = await res.json();
-  const crates = data
-    .filter(
-      (c: any) =>
-        (c.type === "Case" || c.type === "Sticker Capsule" || c.type === "Autograph Capsule") &&
-        c.contains &&
-        c.contains.length > 0
-    )
-    .map(projectCrate);
-  cache = { ts: Date.now(), crates };
-  baked = null;
+
+  if (fallbackCache && Date.now() - fallbackCache.ts < CACHE_TTL_MS) {
+    return fallbackCache.crates;
+  }
+
+  const crates = await fetchUpstreamCrates();
+  fallbackCache = { ts: Date.now(), crates };
   return crates;
 }
 
-/** Final gzipped (base64) body for the crates feed, rebuilt only when the underlying cache refreshes or expires. */
+/** Final gzipped (base64) body for the crates feed. */
 export async function getBakedGzip(): Promise<string> {
-  const crates = await loadCrates(); // refreshes if stale, incl. first call
-  const cratedAt = cache!.ts;
-  if (!baked || baked.cratedAt !== cratedAt) {
-    baked = {
-      gzipB64: gzipSync(Buffer.from(JSON.stringify(crates))).toString("base64"),
-      cratedAt,
-    };
+  if (bakedGzipB64) return bakedGzipB64;
+
+  try {
+    bakedGzipB64 = readBakedGzip().toString("base64");
+    return bakedGzipB64;
+  } catch {
+    warnFallback();
   }
-  return baked.gzipB64;
+
+  // Fallback only: build + gzip the upstream data in memory.
+  const crates = await loadCrates();
+  bakedGzipB64 = gzipSync(Buffer.from(JSON.stringify(crates))).toString("base64");
+  return bakedGzipB64;
 }
 
 /** Last successfully cached crates, or null — used as degrade-instead-of-fail fallback. */
 export function staleCrates(): any[] | null {
-  return cache ? cache.crates : null;
+  return bakedCrates || fallbackCache?.crates || null;
 }

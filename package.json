@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
+    "bake-crates": "tsx scripts/bake-crates.ts",
+    "build:backend": "./scripts/build-backend.sh",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

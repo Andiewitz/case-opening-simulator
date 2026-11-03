@@ -27,6 +27,22 @@ A polished, fully-featured Counter-Strike 2 (CS2) case opening simulator built w
 2. Run `npm run dev` to boot the application on port 3000.
 3. Run `npm run build` to produce a static `dist/` bundle for S3 hosting.
 
+## Backend
+
+The Lambda crate pool is baked into `backend/src/shared/crates.json.gz` so the
+backend never downloads the upstream GitHub feed at runtime. After upstream
+cases change, refresh the snapshot and redeploy:
+
+```sh
+npm run bake-crates
+npm run build:backend
+cd terraform && AWS_PROFILE=tf terraform apply
+```
+
+`build:backend` copies the snapshot next to the bundled handlers so Terraform
+packages it into the Lambda artifact.
+
+
 ## Roadmap
 
 Authentication, database, and API layers are being migrated to AWS serverless (Cognito + DynamoDB + API Gateway + Lambda) via Terraform, committed in phases. Deployment is not yet wired up.
