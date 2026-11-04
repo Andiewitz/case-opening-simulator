@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node version comes from .nvmrc so CI and local runs agree.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # One install: backend is an npm workspace, so its dependencies come from
+      # the root lockfile. There is no second `npm ci` any more.
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck (frontend + backend)
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Lambda bundles
+        run: npm run build:backend
+
+      # Fails when the baked crate snapshot is missing, malformed or older than
+      # the limit — a stale snapshot silently changes the drop pool.
+      - name: Crates snapshot freshness
+        run: npm run check:crates
+
+      # Blocks on high/critical advisories in the dependency graph. Moderate
+      # advisories in the lint toolchain are tracked by Dependabot.
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            dist
+            backend/dist
+
+  terraform:
+    name: Terraform format and validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Check formatting
+        working-directory: terraform
+        run: terraform fmt -check -recursive -diff
+
+      # No backend config is committed and validate needs no credentials, so
+      # this runs on every PR without touching real state.
+      - name: Init (no backend)
+        working-directory: terraform
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        working-directory: terraform
+        run: terraform validate

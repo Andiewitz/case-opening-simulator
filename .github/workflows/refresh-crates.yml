@@ -1,0 +1,49 @@
+name: Refresh crates snapshot
+
+# Upstream (ByMykel/CSGO-API) adds and retires cases continuously. The backend
+# serves a baked snapshot, so without this the pool drifts for months.
+on:
+  schedule:
+    - cron: "17 4 * * 1" # Mondays, 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Re-bakes only when the projection actually changed; the script writes
+      # the same bytes otherwise, so the diff stays empty and no PR is opened.
+      - name: Re-bake snapshot
+        run: npm run bake-crates
+
+      - name: Report the new pool size
+        run: npm run check:crates
+
+      - name: Open or update the refresh PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/refresh-crates
+          title: "chore: refresh crates snapshot"
+          commit-message: "chore: refresh crates snapshot from upstream"
+          body: |
+            Automated refresh of `backend/src/shared/crates.json.gz` from
+            ByMykel/CSGO-API, produced by `npm run bake-crates`.
+
+            Review the crate/item counts in the job log and spot-check any new
+            case before merging. CI's snapshot freshness gate fails after 120
+            days, so an unmerged PR will eventually turn the build red.
+          add-paths: backend/src/shared/crates.json.gz
+          delete-branch: true

@@ -1,0 +1,130 @@
+name: Deploy
+
+# Manual only: a deploy needs a reviewed plan and an approval, and the workflow
+# never runs from a fork.
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_infrastructure:
+        description: "Run terraform apply after the build (otherwise only the frontend is deployed)"
+        type: boolean
+        default: false
+      ref:
+        description: "Git ref to deploy (defaults to the selected branch)"
+        type: string
+        required: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build frontend and Lambda bundles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm run check:crates
+      - run: npm run build
+      - run: npm run build:backend
+
+      - name: Package frontend
+        run: (cd dist && zip -qr ../frontend.zip .)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deploy-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 3
+          path: |
+            frontend.zip
+            backend/dist
+
+  deploy:
+    name: Deploy to production
+    needs: build
+    runs-on: ubuntu-latest
+    # Requires a reviewer in the repository's "production" environment.
+    environment:
+      name: production
+    permissions:
+      contents: read
+      id-token: write # GitHub OIDC -> AWS role; no long-lived keys
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AMPLIFY_APP_ID: ${{ vars.AMPLIFY_APP_ID }}
+      AMPLIFY_BRANCH: ${{ vars.AMPLIFY_BRANCH }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: deploy-${{ github.sha }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install
+        run: npm ci
+
+      - name: Bake + build backend for terraform
+        run: npm run build:backend
+
+      # The backend zip is read by terraform's archive_file data source, so the
+      # bundles must exist before init/plan/apply.
+      - name: Terraform plan
+        working-directory: terraform
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ vars.TF_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}"
+          terraform plan -input=false -out=tfplan
+
+      - name: Terraform apply
+        if: inputs.deploy_infrastructure
+        working-directory: terraform
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Upload Amplify deployment
+        if: env.AMPLIFY_APP_ID != ''
+        run: |
+          set -euo pipefail
+          DEPLOYMENT=$(aws amplify create-deployment \
+            --app-id "$AMPLIFY_APP_ID" \
+            --branch-name "$AMPLIFY_BRANCH")
+          ZIP_URL=$(echo "$DEPLOYMENT" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).zipUploadUrl))")
+          JOB_ID=$(echo "$DEPLOYMENT" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).jobId))")
+          curl -sf -X PUT -H "Content-Type: application/zip" --upload-file frontend.zip "$ZIP_URL"
+          aws amplify start-deployment --app-id "$AMPLIFY_APP_ID" --branch-name "$AMPLIFY_BRANCH" --job-id "$JOB_ID"
+
+      # CI2 smoke checks: the two failures that are otherwise invisible —
+      # a broken SPA rewrite and a missing crates snapshot in the Lambda zip.
+      - name: Smoke check
+        run: |
+          set -euo pipefail
+          curl -sf -o /dev/null -w "frontend %{http_code}\n" "$FRONTEND_URL/"
+          curl -sf -o /dev/null -w "spa route %{http_code}\n" "$FRONTEND_URL/inventory"
+          curl -sf -D /tmp/crates.headers -o /dev/null "$API_BASE_URL/crates"
+          grep -qi "content-encoding: gzip" /tmp/crates.headers
+          curl -sf -o /dev/null "$API_BASE_URL/config"
+          echo "smoke checks passed"

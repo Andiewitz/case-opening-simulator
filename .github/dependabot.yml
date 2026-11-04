@@ -1,0 +1,35 @@
+version: 2
+
+updates:
+  # Root package.json plus the backend workspace: one lockfile, one PR group.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      aws-sdk:
+        patterns:
+          - "@aws-sdk/*"
+      eslint:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "typescript-eslint"
+          - "@typescript-eslint/*"
+      test-tooling:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "jsdom"
+          - "aws-sdk-client-mock"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: terraform
+    directory: "/terraform"
+    schedule:
+      interval: monthly
