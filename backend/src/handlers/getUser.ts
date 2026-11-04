@@ -1,27 +1,23 @@
-import { docClient, TABLE_USERS, json, requireAuth, corsHeaders } from "../shared/utils";
-import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { json, preflight, requireAuth, logFailure } from "../shared/utils";
+import { ensureUser } from "../shared/users";
 
+/**
+ * GET /users/{userId} — the caller's profile. The id in the path is ignored on
+ * purpose: the row is read for the token's user, so one account can never read
+ * another's balance by guessing an id.
+ */
 export const handler = async (event: any): Promise<any> => {
-  if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: corsHeaders, body: "" };
+  if (event.httpMethod === "OPTIONS") return preflight(event);
 
   const auth = await requireAuth(event.headers);
-  if ("statusCode" in auth) return json(auth.statusCode, JSON.parse(auth.body));
+  if ("statusCode" in auth) return json(event, auth.statusCode, JSON.parse(auth.body));
   const { userId } = auth;
 
   try {
-    const snap = await docClient.send(
-      new GetCommand({ TableName: TABLE_USERS, Key: { userId } })
-    );
-    let user = snap.Item;
-    // Seed the account on first sign-in (starting virtual balance).
-    if (!user) {
-      const now = new Date().toISOString();
-      user = { userId, balance: 100, stats: { casesOpened: 0, totalSpent: 0, totalValue: 0 }, createdAt: now, updatedAt: now };
-      await docClient.send(new PutCommand({ TableName: TABLE_USERS, Item: user as any }));
-    }
-    return json(200, { id: user.userId, ...user } as any);
-  } catch (e: any) {
-    console.error("GETUSER_FAIL", JSON.stringify({ name: e.name, message: e.message }));
-    return json(500, { error: e.message || "Get user failed" });
+    const user = await ensureUser(userId);
+    return json(event, 200, { id: user.userId, ...user });
+  } catch (error: any) {
+    logFailure(event, "get_user_failed", error, { userId });
+    return json(event, 500, { error: "Get user failed" });
   }
 };

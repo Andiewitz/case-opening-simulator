@@ -1,3 +1,11 @@
+/**
+ * Roll simulation — the whole economy lives in this file.
+ *
+ * Every randomness source goes through an injectable `rng` so the drop table
+ * can be tested deterministically (docs/plan.md T0/T1–T3) and a roll can be
+ * replayed from a seeded generator when supporting a dispute.
+ */
+
 const RARITY_PRICES: Record<string, { min: number; max: number }> = {
   rarity_common: { min: 0.1, max: 0.5 },
   rarity_uncommon: { min: 0.2, max: 1 },
@@ -14,7 +22,13 @@ const RARITY_PRICES: Record<string, { min: number; max: number }> = {
 const TIER1_BLUE_GEM_PATTERNS = [661, 387, 321, 670, 74, 269, 150];
 const TIER2_BLUE_GEM_PATTERNS = [955, 92, 828, 592, 179, 310, 4];
 
-export function simulatePriceAndCondition(item: any, isSpecialItem = false) {
+export type Rng = () => number;
+
+export function simulatePriceAndCondition(
+  item: any,
+  isSpecialItem = false,
+  rng: Rng = Math.random
+) {
   const rarityId = item.rarity?.id || "rarity_rare_weapon";
   let priceRange = RARITY_PRICES[rarityId] || { min: 0.5, max: 5 };
 
@@ -26,7 +40,7 @@ export function simulatePriceAndCondition(item: any, isSpecialItem = false) {
     }
   }
 
-  let basePrice = Math.random() * (priceRange.max - priceRange.min) + priceRange.min;
+  const basePrice = rng() * (priceRange.max - priceRange.min) + priceRange.min;
 
   const isSticker =
     item.id?.startsWith("sticker-") ||
@@ -46,33 +60,33 @@ export function simulatePriceAndCondition(item: any, isSpecialItem = false) {
   }
 
   let float = 0;
-  const conditionRoll = Math.random() * 100;
+  const conditionRoll = rng() * 100;
   let condition = "Field-Tested";
-  let condMul = 0.70;
+  let condMul = 0.7;
 
   if (conditionRoll <= 3.0) {
-    float = Math.random() * 0.07;
+    float = rng() * 0.07;
     condition = "Factory New";
     condMul = 1.0;
   } else if (conditionRoll <= 24.0) {
-    float = 0.07 + Math.random() * 0.08;
+    float = 0.07 + rng() * 0.08;
     condition = "Minimal Wear";
     condMul = 0.85;
   } else if (conditionRoll <= 57.0) {
-    float = 0.15 + Math.random() * 0.23;
+    float = 0.15 + rng() * 0.23;
     condition = "Field-Tested";
-    condMul = 0.70;
+    condMul = 0.7;
   } else if (conditionRoll <= 81.0) {
-    float = 0.38 + Math.random() * 0.07;
+    float = 0.38 + rng() * 0.07;
     condition = "Well-Worn";
     condMul = 0.55;
   } else {
-    float = 0.45 + Math.random() * 0.55;
+    float = 0.45 + rng() * 0.55;
     condition = "Battle-Scarred";
-    condMul = 0.40;
+    condMul = 0.4;
   }
 
-  const pattern = Math.floor(Math.random() * 1000) + 1;
+  const pattern = Math.floor(rng() * 1000) + 1;
   let finalPrice = basePrice * condMul;
 
   if (item.name?.includes("Case Hardened")) {
@@ -83,7 +97,7 @@ export function simulatePriceAndCondition(item: any, isSpecialItem = false) {
     }
   }
 
-  let phase = item.phase;
+  const phase = item.phase;
   if (phase) {
     if (phase === "Emerald" || phase === "Ruby" || phase === "Sapphire") {
       finalPrice *= 8;
@@ -92,7 +106,7 @@ export function simulatePriceAndCondition(item: any, isSpecialItem = false) {
     }
   }
 
-  const isStatTrak = Math.random() < 0.1;
+  const isStatTrak = rng() < 0.1;
   if (isStatTrak) finalPrice *= 2.5;
 
   return {
@@ -106,7 +120,22 @@ export function simulatePriceAndCondition(item: any, isSpecialItem = false) {
   };
 }
 
-export function generateCaseRoll(crate: any) {
+/**
+ * Drop table (must sum to 100):
+ *   ≤ 0.26  → Rare Special Item (gold), only when the crate has one
+ *   ≤ 0.90  → Covert / Extraordinary
+ *   ≤ 4.10  → Classified / Exotic
+ *   ≤ 20.08 → Restricted / Remarkable / High Grade (Purple)
+ *   rest    → the blue pool (all remaining items, or the whole crate)
+ */
+export const DROP_BANDS = {
+  gold: 0.26,
+  red: 0.9,
+  pink: 4.1,
+  purple: 20.08,
+} as const;
+
+export function generateCaseRoll(crate: any, rng: Rng = Math.random) {
   const contains = crate.contains || [];
   const containsRare = crate.contains_rare || [];
 
@@ -119,7 +148,7 @@ export function generateCaseRoll(crate: any) {
 
   const hasRare = containsRare.length > 0;
 
-  const roll = Math.random() * 100;
+  const roll = rng() * 100;
   let selectedItem = null;
   let isSpecialItem = false;
 
@@ -138,28 +167,26 @@ export function generateCaseRoll(crate: any) {
     itemsByRarity["Base Grade"] ||
     contains;
 
-  if (roll <= 0.26 && hasRare) {
-    selectedItem = containsRare[Math.floor(Math.random() * containsRare.length)];
+  if (roll <= DROP_BANDS.gold && hasRare) {
+    selectedItem = containsRare[Math.floor(rng() * containsRare.length)];
     selectedItem = {
       ...selectedItem,
       rarity: { id: "rarity_ancient", name: "Rare Special Item", color: "#ffd700" },
     };
     isSpecialItem = true;
-  } else if (roll <= 0.90 && redTier.length > 0) {
-    selectedItem = redTier[Math.floor(Math.random() * redTier.length)];
-  } else if (roll <= 4.10 && pinkTier.length > 0) {
-    selectedItem = pinkTier[Math.floor(Math.random() * pinkTier.length)];
-  } else if (roll <= 20.08 && purpleTier.length > 0) {
-    selectedItem = purpleTier[Math.floor(Math.random() * purpleTier.length)];
-  } else {
-    if (blueTier && blueTier.length > 0) {
-      selectedItem = blueTier[Math.floor(Math.random() * blueTier.length)];
-    }
+  } else if (roll <= DROP_BANDS.red && redTier.length > 0) {
+    selectedItem = redTier[Math.floor(rng() * redTier.length)];
+  } else if (roll <= DROP_BANDS.pink && pinkTier.length > 0) {
+    selectedItem = pinkTier[Math.floor(rng() * pinkTier.length)];
+  } else if (roll <= DROP_BANDS.purple && purpleTier.length > 0) {
+    selectedItem = purpleTier[Math.floor(rng() * purpleTier.length)];
+  } else if (blueTier && blueTier.length > 0) {
+    selectedItem = blueTier[Math.floor(rng() * blueTier.length)];
   }
 
   if (!selectedItem) {
-    selectedItem = contains[Math.floor(Math.random() * contains.length)];
+    selectedItem = contains[Math.floor(rng() * contains.length)];
   }
 
-  return simulatePriceAndCondition(selectedItem, isSpecialItem);
+  return simulatePriceAndCondition(selectedItem, isSpecialItem, rng);
 }
