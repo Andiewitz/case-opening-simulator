@@ -66,6 +66,36 @@ jobs:
             dist
             backend/dist
 
+  e2e:
+    name: End-to-end (stub API)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # The reel/animation contract: the strip must stop on the item the API
+      # returned. Runs against a local stub, so no credentials are involved.
+      - run: npm run test:e2e
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          retention-days: 7
+          path: |
+            playwright-report
+            test-results
+
   terraform:
     name: Terraform format and validate
     runs-on: ubuntu-latest

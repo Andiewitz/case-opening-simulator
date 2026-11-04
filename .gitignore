@@ -3,6 +3,9 @@ build/
 dist/
 backend/dist/
 coverage/
+dist-e2e/
+playwright-report/
+test-results/
 .DS_Store
 *.log
 .env*

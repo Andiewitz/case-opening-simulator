@@ -10,6 +10,9 @@ export default tseslint.config(
       'backend/dist/**',
       'node_modules/**',
       'coverage/**',
+      'dist-e2e/**',
+      'playwright-report/**',
+      'test-results/**',
       'public/**',
       'terraform/**',
     ],
@@ -32,6 +35,17 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+      'no-empty': ['error', { allowEmptyCatch: true }],
+    },
+  },
+  {
+    // The e2e stub is a plain Node script, so it needs Node globals and may
+    // ignore a malformed request body.
+    files: ['tests/e2e/**/*.mjs'],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+    rules: {
       'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },
