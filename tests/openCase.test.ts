@@ -143,11 +143,11 @@ describe("concurrency", () => {
 
     expect(successes).toHaveLength(2);
     expect(conflicts).toHaveLength(8);
-    expect(
-      conflicts.every((response) =>
-        ["CONFLICT", "INSUFFICIENT_BALANCE"].includes(JSON.parse(response.body).code)
-      )
-    ).toBe(true);
+    // A cancelled transaction is re-read and classified, so the caller learns
+    // whether the account ran out of money or simply lost a race.
+    const codes = conflicts.map((response) => JSON.parse(response.body).code);
+    expect(codes.every((code) => ["CONFLICT", "INSUFFICIENT_BALANCE"].includes(code))).toBe(true);
+    expect(codes.filter((code) => code === "INSUFFICIENT_BALANCE").length).toBeGreaterThan(0);
 
     const stored = user();
     expect(stored.balance).toBeCloseTo(0, 2);
@@ -182,6 +182,21 @@ describe("throttling", () => {
     expect(second.statusCode).toBe(429);
     expect(JSON.parse(second.body).code).toBe("TOO_FAST");
     expect(user().balance).toBeCloseTo(50 - CASE_COST, 2);
+  });
+
+  it("reports TOO_FAST when parallel opens hit the cooldown guard", async () => {
+    process.env.OPEN_COOLDOWN_MS = "10000";
+    seedUser({ balance: 50 });
+
+    const responses = await Promise.all(Array.from({ length: 5 }, () => open()));
+    const succeeded = responses.filter((response) => response.statusCode === 200);
+    const throttled = responses.filter((response) => response.statusCode === 429);
+
+    expect(succeeded).toHaveLength(1);
+    expect(throttled).toHaveLength(4);
+    expect(throttled.every((response) => JSON.parse(response.body).code === "TOO_FAST")).toBe(true);
+    expect(user().balance).toBeCloseTo(50 - CASE_COST, 2);
+    expect(harness.db.rows(TABLES.inventory)).toHaveLength(1);
   });
 
   it("allows the next open once the window has passed", async () => {

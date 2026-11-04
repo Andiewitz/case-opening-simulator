@@ -16,6 +16,39 @@ import { generateCaseRoll } from "../shared/simulation";
 import { loadCrates } from "../shared/crates";
 import { CASE_COST, MAX_INVENTORY_ITEMS, openCooldownMs } from "../config";
 
+type OpenConflict = { statusCode: number; code: string; error: string };
+
+/**
+ * A cancelled transaction only says "a condition failed". Re-reading the row
+ * says *which* guard fired, so the client can show "not enough balance"
+ * instead of a generic retry prompt.
+ *
+ * The guards share one ConditionExpression because DynamoDB rejects a
+ * transaction that touches the same item twice, so the balance, inventory cap
+ * and cooldown checks cannot each carry their own cancellation reason.
+ */
+async function describeOpenConflict(userId: string, cooldown: number): Promise<OpenConflict> {
+  try {
+    const user = await ensureUser(userId);
+    if (typeof user.balance !== "number" || user.balance < CASE_COST) {
+      return { statusCode: 409, code: "INSUFFICIENT_BALANCE", error: "Insufficient balance" };
+    }
+    if ((user.inventoryCount ?? 0) >= MAX_INVENTORY_ITEMS) {
+      return {
+        statusCode: 409,
+        code: "INVENTORY_FULL",
+        error: "Inventory is full — sell some items first",
+      };
+    }
+    if (cooldown > 0 && user.lastOpenAt && Date.now() - user.lastOpenAt < cooldown) {
+      return { statusCode: 429, code: "TOO_FAST", error: "Slow down — one open at a time" };
+    }
+  } catch {
+    // Classification is a nicety; the open already failed, so never mask it.
+  }
+  return { statusCode: 409, code: "CONFLICT", error: "Could not complete the open — please try again" };
+}
+
 export const handler = async (event: any): Promise<any> => {
   if (event.httpMethod === "OPTIONS") return preflight(event);
   if (originDenied(event)) return json(event, 403, { error: "Origin not allowed" });
@@ -140,12 +173,10 @@ export const handler = async (event: any): Promise<any> => {
   } catch (error: any) {
     if (error?.name === "TransactionCanceledException") {
       // A concurrent open/sell changed the account between our read and the
-      // write. Nothing was written; the client may retry.
-      logEvent("warn", "open_case_conflict", event, { userId, crateId });
-      return json(event, 409, {
-        error: "Could not complete the open — please try again",
-        code: "CONFLICT",
-      });
+      // write. Nothing was written; report which guard stopped it.
+      const conflict = await describeOpenConflict(userId, cooldown);
+      logEvent("warn", "open_case_conflict", event, { userId, crateId, code: conflict.code });
+      return json(event, conflict.statusCode, { error: conflict.error, code: conflict.code });
     }
     logFailure(event, "open_case_failed", error, { userId, crateId });
     return json(event, 500, { error: "Open case failed" });

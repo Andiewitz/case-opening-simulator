@@ -1,6 +1,5 @@
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { docClient, TABLE_INVENTORY } from "./utils";
-import { countInventory } from "./users";
 
 export type InventoryPage = { items: any[]; nextCursor?: string };
 
@@ -42,4 +41,3 @@ export async function listAllInventory(userId: string, max = 500): Promise<any[]
   return items;
 }
 
-export { countInventory };

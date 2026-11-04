@@ -244,6 +244,7 @@ describe("POST /inventory/sell-all", () => {
     expect(body.sold).toBe(3);
     expect(body.total).toBeCloseTo(6.5, 2);
     expect(body.soldItemIds).toHaveLength(3);
+    expect(body.remaining).toBe(0);
     expect(harness.db.rows(TABLES.inventory)).toHaveLength(0);
     expect(user().balance).toBeCloseTo(6.5, 2);
     expect(user().inventoryCount).toBe(0);
@@ -255,8 +256,33 @@ describe("POST /inventory/sell-all", () => {
     const response = await sellAllHandler(apiEvent({ body: "{}" }));
 
     expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)).toMatchObject({ sold: 0, total: 0, soldItemIds: [] });
+    expect(JSON.parse(response.body)).toMatchObject({
+      sold: 0,
+      total: 0,
+      soldItemIds: [],
+      remaining: 0,
+    });
     expect(user().balance).toBe(10);
+  });
+
+  it("sells past DynamoDB's per-transaction limit and reports nothing left", async () => {
+    // 120 items is more than one 99-action transaction: the handler must chunk
+    // and still leave a consistent balance and counter.
+    seedUser({ balance: 0, inventoryCount: 120 });
+    for (let i = 0; i < 120; i++) {
+      seedItem(i, { price: 1, createdAt: new Date(2026, 0, 1, 0, i).toISOString() });
+    }
+
+    const response = await sellAllHandler(apiEvent({ body: "{}" }));
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.sold).toBe(120);
+    expect(body.total).toBeCloseTo(120, 2);
+    expect(body.remaining).toBe(0);
+    expect(harness.db.rows(TABLES.inventory)).toHaveLength(0);
+    expect(user().balance).toBeCloseTo(120, 2);
+    expect(user().inventoryCount).toBe(0);
   });
 
   it("is idempotent when called twice", async () => {

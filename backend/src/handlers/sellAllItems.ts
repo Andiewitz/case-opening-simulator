@@ -11,7 +11,7 @@ import {
   logEvent,
   logFailure,
 } from "../shared/utils";
-import { ensureUser } from "../shared/users";
+import { countInventory, ensureUser } from "../shared/users";
 import { listAllInventory } from "../shared/inventory";
 import { MAX_INVENTORY_ITEMS } from "../config";
 
@@ -43,7 +43,7 @@ export const handler = async (event: any): Promise<any> => {
 
     const all = await listAllInventory(userId, MAX_INVENTORY_ITEMS);
     if (all.length === 0) {
-      return json(event, 200, { sold: 0, total: 0, soldItemIds: [] });
+      return json(event, 200, { sold: 0, total: 0, soldItemIds: [], remaining: 0 });
     }
 
     const soldItemIds: string[] = [];
@@ -85,16 +85,23 @@ export const handler = async (event: any): Promise<any> => {
       total += chunkTotal;
     }
 
+    // DynamoDB caps a transaction at 100 actions, so a collection larger than
+    // one chunk is sold in several. `remaining` tells the client whether to
+    // call again instead of assuming the inventory is now empty.
+    const remaining = await countInventory(userId);
+
     logEvent("info", "sell_all_items", event, {
       userId,
       count: soldItemIds.length,
       total: Number(total.toFixed(2)),
+      remaining,
     });
 
     return json(event, 200, {
       sold: soldItemIds.length,
       total: Number(total.toFixed(2)),
       soldItemIds,
+      remaining,
     });
   } catch (error: any) {
     if (error?.name === "TransactionCanceledException") {
