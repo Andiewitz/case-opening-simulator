@@ -83,6 +83,12 @@ recovery path.
 variables (`AWS_REGION`, `AMPLIFY_APP_ID`, `AMPLIFY_BRANCH`, `API_BASE_URL`,
 `FRONTEND_URL`, `TF_STATE_BUCKET`, `TF_STATE_KEY`) and the `AWS_ROLE_ARN` secret.
 
+**Checked:** `gh variable list` and `gh secret list` are both empty, and
+`gh run list --workflow=deploy.yml` returns nothing — the workflow has never
+run. Every production change so far (infrastructure and frontend) was applied
+from this laptop with the root credentials, so the audit trail is a local shell
+history rather than a workflow run.
+
 **What I need from you:** decide whether CI should own deploys (safer, auditable)
 or you keep applying locally. If CI, I'll set the variables once the OIDC role
 exists.
