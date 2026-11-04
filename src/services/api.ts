@@ -53,7 +53,8 @@ export async function warmCaseOpener(accessToken: string | null): Promise<void> 
       body: JSON.stringify({ warmup: true }),
     });
   } catch {
-    // Warm-up is an optimization; never block or surface its failure.
+    // Allow a later mount to retry after a transient failure.
+    lastWarmAt = 0;
   }
 }
 

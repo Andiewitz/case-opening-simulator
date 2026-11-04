@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, getCurrentUser, getValidAccessToken } from "./services/auth";
-import { getUser } from "./services/api";
+import { getUser, warmCaseOpener } from "./services/api";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import CaseOpener from "./pages/CaseOpener";
@@ -19,6 +19,7 @@ export default function App() {
       if (!mounted) return;
       if (u) {
         const token = await getValidAccessToken();
+        if (token) void warmCaseOpener(token);
         let profile = u;
         try {
           const userId = u.userId || u.sub || u.username;
