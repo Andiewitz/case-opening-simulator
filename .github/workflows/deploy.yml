@@ -83,6 +83,12 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.13.3"
+          terraform_wrapper: false
+
       - name: Install
         run: npm ci
 
@@ -94,16 +100,15 @@ jobs:
       - name: Terraform plan
         working-directory: terraform
         run: |
-          terraform init -input=false \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ vars.TF_STATE_KEY }}" \
-            -backend-config="region=${{ env.AWS_REGION }}"
-          terraform plan -input=false -out=tfplan
+          # The bucket and key are pinned in backend.tf, so init needs no
+          # flags and a mistyped variable cannot point CI at a different state.
+          terraform init -input=false -lock-timeout=60s
+          terraform plan -input=false -lock-timeout=60s -out=tfplan
 
       - name: Terraform apply
         if: inputs.deploy_infrastructure
         working-directory: terraform
-        run: terraform apply -input=false -auto-approve tfplan
+        run: terraform apply -input=false -lock-timeout=60s -auto-approve tfplan
 
       - name: Upload Amplify deployment
         if: env.AMPLIFY_APP_ID != ''
@@ -116,6 +121,20 @@ jobs:
           JOB_ID=$(echo "$DEPLOYMENT" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).jobId))")
           curl -sf -X PUT -H "Content-Type: application/zip" --upload-file frontend.zip "$ZIP_URL"
           aws amplify start-deployment --app-id "$AMPLIFY_APP_ID" --branch-name "$AMPLIFY_BRANCH" --job-id "$JOB_ID"
+
+          # Wait for the job to finish: starting a deployment returns immediately,
+          # so smoke-checking now would test the previous build and pass.
+          for attempt in $(seq 1 30); do
+            STATUS=$(aws amplify get-job --app-id "$AMPLIFY_APP_ID" --branch-name "$AMPLIFY_BRANCH" \
+              --job-id "$JOB_ID" --query 'job.summary.status' --output text)
+            echo "amplify job: $STATUS"
+            case "$STATUS" in
+              SUCCEED) break ;;
+              FAILED|CANCELLED) echo "Amplify job $STATUS" >&2; exit 1 ;;
+            esac
+            if [ "$attempt" -eq 30 ]; then echo "Amplify job did not finish in 5 minutes" >&2; exit 1; fi
+            sleep 10
+          done
 
       # CI2 smoke checks: the two failures that are otherwise invisible —
       # a broken SPA rewrite and a missing crates snapshot in the Lambda zip.
