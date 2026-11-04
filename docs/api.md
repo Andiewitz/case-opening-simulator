@@ -91,12 +91,18 @@ Errors:
 | 404 | — | unknown `crateId` |
 | 409 | `INSUFFICIENT_BALANCE` | balance below the case cost |
 | 409 | `INVENTORY_FULL` | account holds `maxInventoryItems` items |
-| 409 | `CONFLICT` | the guarded transaction was cancelled by a concurrent change — retry |
+| 409 | `CONFLICT` | the guarded transaction was cancelled by a concurrent change and re-reading the row did not explain why — retry |
 | 429 | `TOO_FAST` | another open inside `OPEN_COOLDOWN_MS` |
 | 500 | — | unexpected failure (logged as `open_case_failed`) |
 
 The 409/429 checks are read from the account row and are advisory: the
 transaction's `balance >= :cost` condition is what makes overdrawing impossible.
+
+If the transaction is cancelled anyway, the handler re-reads the account and
+returns the specific code (`INSUFFICIENT_BALANCE`, `INVENTORY_FULL`, `TOO_FAST`)
+with its matching status, so a client can show the real reason instead of a
+generic retry. `CONFLICT` is left for the case where the re-read looks healthy —
+the row genuinely changed under a concurrent request.
 
 ### `warmup`
 
@@ -125,13 +131,16 @@ Auth required. Sells every item the caller holds, in transactions of at most 99
 items (DynamoDB's limit). Body `{}`.
 
 ```json
-{ "sold": 128, "total": 812.44, "soldItemIds": ["…", "…"] }
+{ "sold": 128, "total": 812.44, "soldItemIds": ["…", "…"], "remaining": 0 }
 ```
 
 `soldItemIds` is authoritative even if the request fails later, so the client
-can refresh rather than guess. Empty inventory returns `{ "sold": 0, "total": 0,
-"soldItemIds": [] }`. Errors: `401`; `403`; `409 CONFLICT` (your inventory
-changed mid-sale — refresh and retry); `500`.
+can refresh rather than guess. Because a DynamoDB transaction holds at most 100
+actions, a collection larger than 99 items is sold in several chunks and
+`remaining` reports what is left afterwards — call again while it is above zero
+(the UI loops up to ten rounds). Empty inventory returns `{ "sold": 0, "total":
+0, "soldItemIds": [], "remaining": 0 }`. Errors: `401`; `403`; `409 CONFLICT`
+(your inventory changed mid-sale — refresh and retry); `500`.
 
 ## `GET /users/{userId}`
 
