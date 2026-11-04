@@ -68,6 +68,7 @@ jobs:
       AMPLIFY_BRANCH: ${{ vars.AMPLIFY_BRANCH }}
       API_BASE_URL: ${{ vars.API_BASE_URL }}
       FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+      COGNITO_CLIENT_ID: ${{ vars.COGNITO_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -146,4 +147,16 @@ jobs:
           curl -sf -D /tmp/crates.headers -o /dev/null "$API_BASE_URL/crates"
           grep -qi "content-encoding: gzip" /tmp/crates.headers
           curl -sf -o /dev/null "$API_BASE_URL/config"
+
+          # A clean checkout has no .env.local, so the values in
+          # .env.production are all the build gets. If they are missing the app
+          # quietly calls the Amplify origin and cannot talk to Cognito, which
+          # looks fine to a status-code check. Assert them inside the bundle.
+          curl -sf "$FRONTEND_URL/?deploy=$GITHUB_SHA" -o /tmp/index.html
+          ASSET=$(grep -o 'assets/index-[^"]*\.js' /tmp/index.html | head -1 || true)
+          test -n "$ASSET"
+          curl -sf "$FRONTEND_URL/$ASSET" -o /tmp/app.js
+          grep -qF "$API_BASE_URL" /tmp/app.js
+          grep -qF "$COGNITO_CLIENT_ID" /tmp/app.js
+          echo "bundle $ASSET knows the API and the user pool"
           echo "smoke checks passed"
