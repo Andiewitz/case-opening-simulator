@@ -81,11 +81,23 @@ export default function Inventory({ user }: { user: any }) {
         setSelling(true);
         try {
             const token = await getValidAccessToken();
-            const result = await sellAllItems(token);
+            // Each call sells at most 99 items (DynamoDB's transaction limit),
+            // so keep going while the server reports items left.
+            let sold = 0;
+            let total = 0;
+            let remaining = 0;
+            for (let round = 0; round < 10; round++) {
+                const result = await sellAllItems(token);
+                sold += result.sold || 0;
+                total += Number(result.total || 0);
+                remaining = result.remaining || 0;
+                if (!result.sold || remaining <= 0) break;
+            }
             playSell();
             toast.push(
-                `Sold ${result.sold} ${result.sold === 1 ? "item" : "items"} for $${Number(result.total || 0).toFixed(2)}.`,
-                "success"
+                `Sold ${sold} ${sold === 1 ? "item" : "items"} for $${total.toFixed(2)}` +
+                    (remaining > 0 ? ` (${remaining} left — try again).` : "."),
+                remaining > 0 ? "info" : "success"
             );
             setConfirmSellAll(false);
             setNextCursor(null);
