@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import { signInWithPassword, signUp, confirmSignUp } from "../services/auth";
 
 // In-app authentication (direct Cognito USER_PASSWORD_AUTH calls instead of
-// the hosted UI) so sign-in works on any origin, including the interim S3
-// HTTP site, with the app's own styling.
+// the hosted UI) so sign-in works on any origin, with the app's own styling.
+// This is the only sign-in path — the hosted-UI callback route was removed
+// (docs/plan.md F15).
 export default function AuthModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [mode, setMode] = useState<"signin" | "signup" | "confirm">("signin");
   const [email, setEmail] = useState("");
@@ -12,6 +13,31 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    restoreRef.current = document.activeElement as HTMLElement | null;
+    // Focus after paint so the input exists for the current mode.
+    const timer = window.setTimeout(() => firstFieldRef.current?.focus(), 0);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("keydown", onKeyDown);
+      restoreRef.current?.focus?.();
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -45,7 +71,7 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
-      <div className="uo-modal">
+      <div className="uo-modal" role="dialog" aria-modal="true" aria-labelledby="uo-auth-title">
         <button
           onClick={onClose}
           className="uo-icon-btn absolute right-3 top-3"
@@ -54,7 +80,9 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
           <X className="w-5 h-5" />
         </button>
 
-        <h2 className="uo-modal-title">{title}</h2>
+        <h2 id="uo-auth-title" className="uo-modal-title">
+          {title}
+        </h2>
         <p className="uo-modal-sub">
           {mode === "signin" && "Sign in to open cases and manage your inventory."}
           {mode === "signup" && "Virtual balance only. No real money required."}
@@ -64,6 +92,7 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
         <form onSubmit={submit} className="uo-form">
           {mode !== "confirm" && (
             <input
+              ref={firstFieldRef}
               type="email"
               required
               autoComplete="email"
@@ -86,9 +115,11 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
           )}
           {mode === "confirm" && (
             <input
+              ref={firstFieldRef}
               type="text"
               required
               inputMode="numeric"
+              autoComplete="one-time-code"
               placeholder="Confirmation code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -97,7 +128,10 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
           )}
 
           {error && (
-            <p className={"uo-form-msg " + (error.startsWith("Check your email") ? "is-ok" : "is-error")}>
+            <p
+              role="status"
+              className={"uo-form-msg " + (error.startsWith("Check your email") ? "is-ok" : "is-error")}
+            >
               {error}
             </p>
           )}

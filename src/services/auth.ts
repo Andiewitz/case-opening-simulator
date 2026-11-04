@@ -1,60 +1,26 @@
-import { CognitoIdentityProviderClient, GlobalSignOutCommand, GetUserCommand } from "@aws-sdk/client-cognito-identity-provider";
-
-const client = new CognitoIdentityProviderClient({});
-
 const COGNITO_DOMAIN = import.meta.env.VITE_COGNITO_DOMAIN || "";
 const COGNITO_CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID || "";
 const COGNITO_REGION = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
-const REDIRECT_URI = import.meta.env.VITE_COGNITO_REDIRECT_URI || window.location.origin + "/callback";
-const LOGOUT_URI = import.meta.env.VITE_COGNITO_LOGOUT_URI || window.location.origin;
 
 const TOKEN_KEY = "cs2_unboxed_access_token";
 const PROFILE_KEY = "cs2_unboxed_profile";
 const REFRESH_KEY = "cs2_unboxed_refresh_token";
 const AUTH_CHANGED_EVENT = "cs2_unboxed_auth_changed";
 
-export function cognitoAuthUrl(): string {
-  const params = new URLSearchParams({
-    client_id: COGNITO_CLIENT_ID,
-    response_type: "code",
-    scope: "email openid profile",
-    redirect_uri: REDIRECT_URI,
-  });
-  return `https://${COGNITO_DOMAIN}/oauth2/authorize?${params.toString()}`;
-}
-
-export async function signIn(): Promise<void> {
-  window.location.href = cognitoAuthUrl();
-}
-
-export async function completeSignIn(code: string): Promise<{ accessToken: string; profile: any } | null> {
-  if (!COGNITO_DOMAIN || !COGNITO_CLIENT_ID) return null;
-  try {
-    const res = await fetch(`https://${COGNITO_DOMAIN}/oauth2/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        client_id: COGNITO_CLIENT_ID,
-        code,
-        redirect_uri: REDIRECT_URI,
-      }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    storeTokens(data);
-    window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
-    return { accessToken: data.access_token, profile: getCurrentUser() };
-  } catch {
-    return null;
-  }
-}
-
 export async function signOut(): Promise<void> {
   try {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
-      await client.send(new GlobalSignOutCommand({ AccessToken: token }));
+      // Revoke server-side on a best-effort basis; local state is cleared
+      // either way, so a blocked CORS preflight cannot trap the user signed in.
+      await fetch(cognitoTargetUrl(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-amz-json-1.1",
+          "X-Amz-Target": "AWSCognitoIdentityProviderService.GlobalSignOut",
+        },
+        body: JSON.stringify({ AccessToken: token }),
+      });
     }
   } catch {}
   localStorage.removeItem(TOKEN_KEY);
@@ -144,18 +110,8 @@ export async function getValidAccessToken(): Promise<string | null> {
   return refreshInFlight;
 }
 
-export async function getUserProfileFromCognito(accessToken: string): Promise<any | null> {
-  try {
-    const out = await client.send(new GetUserCommand({ AccessToken: accessToken }));
-    const attrs: Record<string, string> = {};
-    (out.UserAttributes || []).forEach((a) => { if (a.Name && a.Value) attrs[a.Name] = a.Value; });
-    return { userId: out.Username, ...attrs };
-  } catch {
-    return null;
-  }
-}
-
-function decodeJwt(token: string): any {
+/** Decodes a JWT payload; exported for tests and token-expiry checks. */
+export function decodeJwt(token: string): any {
   try {
     const parts = token.split(".");
     if (parts.length < 2) return {};
@@ -202,7 +158,8 @@ function friendlyAuthError(err: any): Error {
 
 /**
  * Direct API calls to Cognito (JSON 1.1 protocol) rather than the SDK client —
- * works reliably in browser bundles from any origin.
+ * works reliably in browser bundles from any origin, and keeps the AWS SDK out
+ * of the frontend bundle entirely (docs/plan.md F14).
  */
 const RESP_HEADERS = {
   "Content-Type": "application/x-amz-json-1.1",
@@ -212,10 +169,7 @@ function cognitoTargetUrl(): string {
   return `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/`;
 }
 
-/**
- * Direct password sign-in via the Cognito JSON API — works from any origin
- * (no hosted-UI redirect), e.g. the interim S3 HTTP site.
- */
+/** In-app password sign-in via the Cognito JSON API. */
 export async function signInWithPassword(email: string, password: string): Promise<any> {
   const res = await fetch(cognitoTargetUrl(), {
     method: "POST",

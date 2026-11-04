@@ -1,12 +1,14 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { onAuthStateChanged, getCurrentUser, getValidAccessToken } from "./services/auth";
+import { onAuthStateChanged, getValidAccessToken } from "./services/auth";
 import { getUser, warmCaseOpener } from "./services/api";
 import Layout from "./components/Layout";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { ToastProvider } from "./components/Toast";
 import Home from "./pages/Home";
 import CaseOpener from "./pages/CaseOpener";
 import Inventory from "./pages/Inventory";
-import Callback from "./pages/Callback";
+import NotFound from "./pages/NotFound";
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -27,7 +29,12 @@ export default function App() {
             const fetched = await getUser(userId, token);
             profile = { ...u, ...fetched, balance: fetched.balance, stats: fetched.stats };
           }
-        } catch {}
+        } catch (error) {
+          // Keep the cached identity: a profile fetch failure should not sign
+          // the user out, and the API's own 401 handling already cleared tokens
+          // when the session was truly gone.
+          console.warn("Profile refresh failed", error);
+        }
         setUser(profile);
       } else {
         setUser(null);
@@ -35,28 +42,38 @@ export default function App() {
       setLoading(false);
     });
 
-    return () => { mounted = false; unsub(); };
+    return () => {
+      mounted = false;
+      unsub();
+    };
   }, []);
 
   if (loading) {
     return (
       <div className="uo-screen flex items-center justify-center">
         <div className="uo-bg" aria-hidden="true" />
-        <div className="animate-spin rounded-full h-8 w-8" style={{ border: "2px solid #2c3445", borderBottomColor: "#3be83b" }}></div>
+        <div
+          className="animate-spin rounded-full h-8 w-8"
+          style={{ border: "2px solid #2c3445", borderBottomColor: "#3be83b" }}
+        ></div>
       </div>
     );
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout user={user} />}>
-          <Route index element={<Home user={user} />} />
-          <Route path="case/:id" element={<CaseOpener user={user} />} />
-          <Route path="inventory" element={<Inventory user={user} />} />
-          <Route path="callback" element={<Callback />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <ToastProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Layout user={user} />}>
+              <Route index element={<Home user={user} />} />
+              <Route path="case/:id" element={<CaseOpener user={user} />} />
+              <Route path="inventory" element={<Inventory user={user} />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

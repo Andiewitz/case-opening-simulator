@@ -1,0 +1,124 @@
+/*
+ * Feedback surfaces: toast stack, confirm dialog, error boundary.
+ * Uses the same tokens as unlock.css so they sit inside the existing shell.
+ */
+
+.uo-toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 32px));
+}
+
+.uo-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--uo-line);
+  border-left: 3px solid var(--uo-line);
+  background: linear-gradient(180deg, var(--uo-panel-top), var(--uo-panel-bottom));
+  color: var(--uo-text);
+  font: 600 14px "Barlow Semi Condensed", sans-serif;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+
+.uo-toast.is-error {
+  border-left-color: #eb4b4b;
+}
+.uo-toast.is-success {
+  border-left-color: var(--uo-green);
+}
+.uo-toast.is-info {
+  border-left-color: #4b69ff;
+}
+
+.uo-toast-text {
+  flex: 1;
+  line-height: 1.35;
+}
+
+.uo-toast-close {
+  background: none;
+  border: 0;
+  color: var(--uo-faint);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.uo-toast-close:hover {
+  color: var(--uo-text);
+}
+
+.uo-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.uo-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  padding: 26px 24px 22px;
+  border: 1px solid var(--uo-line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--uo-panel-top), var(--uo-panel-bottom));
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6);
+}
+
+.uo-dialog-title {
+  margin: 0 0 6px;
+  font: 700 22px Rajdhani, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.uo-dialog-body {
+  margin: 0 0 20px;
+  color: var(--uo-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.uo-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.uo-boundary {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  background: var(--uo-bg);
+  color: var(--uo-text);
+}
+
+.uo-boundary pre {
+  max-width: 100%;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--uo-line);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--uo-faint);
+  font: 400 12px/1.5 ui-monospace, SFMono-Regular, monospace;
+  text-align: left;
+}

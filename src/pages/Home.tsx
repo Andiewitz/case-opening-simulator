@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { getCrates } from "../services/api";
 import { steamImg } from "../lib/steam";
+import { useEconomy } from "../hooks/useEconomy";
 import type { LayoutContext } from "../components/Layout";
-
-const CASE_COST = 2.5;
 
 /** A rotation of classic CS rarity colors — gives the wall of cases the
  *  same varied accent spines as the design mock. */
@@ -34,6 +33,7 @@ function SkeletonGrid() {
 
 export default function Home({ user }: { user: any }) {
     const { openAuth } = useOutletContext<LayoutContext>();
+    const { config } = useEconomy();
     const [crates, setCrates] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -123,7 +123,9 @@ export default function Home({ user }: { user: any }) {
                                     />
                                 </div>
                                 <span className="uo-card-name">{crate.name}</span>
-                                <span className="uo-card-price">${CASE_COST.toFixed(2)}</span>
+                                <span className="uo-card-price">
+                                    {config ? `$${config.caseCost.toFixed(2)}` : "\u2014"}
+                                </span>
                             </Link>
                         ))}
                     </div>

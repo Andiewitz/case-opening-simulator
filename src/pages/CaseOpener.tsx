@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
-import { getCrates, openCase } from "../services/api";
+import { useParams, Link, useOutletContext } from "react-router-dom";
+import { getCrates, openCase, ApiError } from "../services/api";
 import { getValidAccessToken, refreshProfile } from "../services/auth";
+import { useToast } from "../components/Toast";
+import { useEconomy } from "../hooks/useEconomy";
+import type { LayoutContext } from "../components/Layout";
 import { playReveal, preloadCaseOpenSound, playCaseOpenSound, getCaseOpenDuration, stopCaseOpenSound } from "../lib/sounds";
 import { steamImg } from "../lib/steam";
 import { motion, AnimatePresence } from "motion/react";
@@ -32,8 +35,14 @@ export default function CaseOpener({ user }: { user: any }) {
 
     // The items to spin through
     const [reelItems, setReelItems] = useState<any[]>([]);
+    const [announcement, setAnnouncement] = useState("");
 
-    const caseCost = 2.50; // Fixed key cost essentially
+    const { openAuth } = useOutletContext<LayoutContext>();
+    const toast = useToast();
+    const { config } = useEconomy();
+    // Price comes from the server (GET /config) so the UI and the charge can
+    // never disagree. Null means "not loaded yet" — never a made-up price.
+    const caseCost = config?.caseCost ?? null;
 
     const reelRef = useRef<HTMLDivElement>(null);
 
@@ -52,8 +61,16 @@ export default function CaseOpener({ user }: { user: any }) {
 
     const handleOpen = async () => {
         if (opening) return;
-        if (!user || user.balance < caseCost) {
-            alert("Insufficient balance or not logged in.");
+        if (!user) {
+            openAuth();
+            return;
+        }
+        if (caseCost === null) {
+            toast.push("Still loading the case price — try again in a moment.", "info");
+            return;
+        }
+        if (user.balance < caseCost) {
+            toast.push("Not enough balance to open this case.");
             return;
         }
 
@@ -62,6 +79,7 @@ export default function CaseOpener({ user }: { user: any }) {
         setOpening(true);
         setShowResult(false);
         setWinningItem(null);
+        setAnnouncement("Unlocking…");
 
         if (reelRef.current) {
             reelRef.current.style.transition = 'none';
@@ -145,15 +163,28 @@ export default function CaseOpener({ user }: { user: any }) {
                             playReveal(savedItem.color || winner.rarity?.color);
                             setShowResult(true);
                             setOpening(false);
+                            // Screen readers get the outcome without the reel.
+                            setAnnouncement(
+                                `You unboxed ${savedItem.name}, valued at $${(savedItem.price || 0).toFixed(2)}.`
+                            );
                         }, (delayBeforeSpin + scrollDuration) * 1000 + 500);
                         // ─── END AUDIO-SYNCED TIMING ────────────────────────────
                     }
                 }, 50);
             });
         } catch (error) {
-             console.error("Open case error:", error);
-             alert("Error opening case.");
-             setOpening(false);
+            console.error("Open case error:", error);
+            if (error instanceof ApiError && error.status === 401) {
+                toast.push("Your session expired. Please sign in again.");
+                openAuth();
+            } else if (error instanceof ApiError) {
+                toast.push(error.message);
+            } else {
+                toast.push("Error opening case. Please try again.");
+            }
+            setShowResult(false);
+            setOpening(false);
+            setAnnouncement("");
         }
     };
 
@@ -163,6 +194,7 @@ export default function CaseOpener({ user }: { user: any }) {
         setShowResult(false);
         setWinningItem(null);
         setReelItems([]);
+        setAnnouncement("");
         if(reelRef.current) {
              reelRef.current.style.transition = 'none';
              reelRef.current.style.transform = `translateX(0px)`;
@@ -194,7 +226,12 @@ export default function CaseOpener({ user }: { user: any }) {
                     <Link to="/" className="uo-backlink uo-backlink-corner absolute left-4 sm:left-8 top-7 sm:top-9">‹ Cases</Link>
                     <h1 className="uo-title">Unlock Container</h1>
                     <div className="uo-sub mt-1">Unlock <b>{crate.name}</b></div>
-                    <div className="uo-note">${caseCost.toFixed(2)} per open · items go straight to your inventory</div>
+                    <div className="uo-note">
+                        {caseCost !== null ? `$${caseCost.toFixed(2)}` : "—"} per open · items go straight to your inventory
+                    </div>
+                    <div role="status" aria-live="assertive" className="sr-only">
+                        {announcement}
+                    </div>
                 </div>
 
                 {/* Center stage: crate / spinning reel / result */}
@@ -241,7 +278,7 @@ export default function CaseOpener({ user }: { user: any }) {
                                 </div>
                             )}
 
-                            <div className="uo-reel-mask absolute inset-0">
+                            <div className="uo-reel-mask absolute inset-0" aria-hidden="true">
                                 <div
                                     className="flex h-full items-center gap-[10px] whitespace-nowrap absolute left-[50%]"
                                     ref={reelRef}
@@ -420,10 +457,11 @@ export default function CaseOpener({ user }: { user: any }) {
                         <div className="flex gap-[10px]">
                             <button
                                 onClick={handleOpen}
-                                disabled={opening || !user || user.balance < caseCost}
+                                disabled={opening || !user || caseCost === null || user.balance < caseCost}
                                 className="uo-btn uo-btn-primary"
                             >
                                 {!user ? "Sign in to unlock"
+                                    : caseCost === null ? "Loading…"
                                     : user.balance < caseCost ? "Insufficient balance"
                                     : opening ? "Unlocking…"
                                     : "Unlock Container"}
