@@ -69,6 +69,9 @@ data "aws_iam_policy_document" "github_deploy" {
       "cloudfront:*",
       "cloudwatch:DeleteAlarms",
       "cloudwatch:DescribeAlarms",
+      # Terraform refreshes tags on every managed alarm; without this the plan
+      # dies with AccessDenied even though the alarms themselves are readable.
+      "cloudwatch:ListTagsForResource",
       "cloudwatch:PutMetricAlarm",
       "cognito-idp:*",
       "dynamodb:*",
@@ -96,8 +99,11 @@ data "aws_iam_policy_document" "github_deploy" {
       "iam:GetRole",
       "iam:GetRolePolicy",
       "iam:ListAttachedRolePolicies",
+      # Tag refreshes on the role and the OIDC provider need these two.
+      "iam:ListOpenIDConnectProviderTags",
       "iam:ListPolicyVersions",
       "iam:ListRolePolicies",
+      "iam:ListRoleTags",
       "iam:PassRole",
       "iam:PutRolePolicy",
       "iam:TagRole",
