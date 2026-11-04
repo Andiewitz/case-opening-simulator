@@ -2,39 +2,42 @@ resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
-# TEMPORARY: serve the site straight from the S3 website endpoint (HTTP) while
-# the account waits for CloudFront verification. Cognito only allows https
-# callback URLs (except localhost), so sign-in is disabled on the S3 site;
-# the full flow works at CloudFront (or npm run dev). Flip this to false once
-# the CloudFront distribution is serving.
+# LEGACY: the S3 website endpoint was a temporary HTTP origin while the
+# account waited for CloudFront verification. Amplify Hosting is now the
+# frontend of record (terraform/amplify.tf, https://main.<app>.amplifyapp.com),
+# so the bucket stays private by default. Set this back to true only to
+# resurrect the interim origin deliberately.
+#
+# Applying this default change removes the public-read bucket policy and the
+# website configuration — see docs/runbook.md.
 variable "public_website_interim" {
-  description = "Public-read S3 website endpoint for the frontend while CloudFront is pending."
+  description = "Public-read S3 website endpoint for the frontend (legacy; Amplify is the frontend of record)."
   type        = bool
-  default     = true
+  default     = false
 }
 
 locals {
   frontend_bucket_statements = concat(
     [
       {
-        Sid       = "AllowCloudFrontOAC"
-        Effect    = "Allow"
+        Sid    = "AllowCloudFrontOAC"
+        Effect = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.frontend.arn}/*"
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.frontend.arn}/*"
       },
     ],
     var.public_website_interim ? [
       {
-        Sid       = "PublicReadWebsiteInterim"
-        Effect    = "Allow"
+        Sid    = "PublicReadWebsiteInterim"
+        Effect = "Allow"
         Principal = {
           AWS = "*"
         }
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.frontend.arn}/*"
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.frontend.arn}/*"
       },
     ] : [],
   )
@@ -61,7 +64,7 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
 }
 
 resource "aws_s3_bucket_website_configuration" "frontend" {
-  count = var.public_website_interim ? 1 : 0
+  count  = var.public_website_interim ? 1 : 0
   bucket = aws_s3_bucket.frontend.id
 
   index_document {
@@ -92,18 +95,18 @@ variable "enable_cloudfront" {
 }
 
 resource "aws_cloudfront_origin_access_control" "frontend" {
-  count                       = var.enable_cloudfront ? 1 : 0
-  name                        = "${var.app_name}-frontend-oac"
-  description                 = "OAC for ${var.app_name} frontend S3 origin"
+  count                             = var.enable_cloudfront ? 1 : 0
+  name                              = "${var.app_name}-frontend-oac"
+  description                       = "OAC for ${var.app_name} frontend S3 origin"
   origin_access_control_origin_type = "s3"
-  signing_behavior            = "always"
-  signing_protocol            = "sigv4"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 resource "aws_s3_bucket_policy" "frontend_cloudfront" {
   bucket = aws_s3_bucket.frontend.id
   policy = jsonencode({
-    Version = "2012-10-17"
+    Version   = "2012-10-17"
     Statement = local.frontend_bucket_statements
   })
 
@@ -130,10 +133,10 @@ resource "aws_cloudfront_distribution" "frontend" {
   default_root_object = "index.html"
 
   default_cache_behavior {
-    target_origin_id = "S3-${aws_s3_bucket.frontend.id}"
+    target_origin_id       = "S3-${aws_s3_bucket.frontend.id}"
     viewer_protocol_policy = "redirect-to-https"
-    allowed_methods  = ["GET", "HEAD"]
-    cached_methods   = ["GET", "HEAD"]
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
 
     forwarded_values {
       query_string = false
@@ -148,14 +151,14 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   custom_error_response {
-    error_code      = 404
-    response_code   = 200
+    error_code         = 404
+    response_code      = 200
     response_page_path = "/index.html"
   }
 
   custom_error_response {
-    error_code      = 403
-    response_code   = 200
+    error_code         = 403
+    response_code      = 200
     response_page_path = "/index.html"
   }
 

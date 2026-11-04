@@ -3,8 +3,8 @@
 # Run BEFORE `terraform apply` — the data.archive_file data source in
 # terraform/lambda.tf zips this output directory.
 #
-# Each handler bundles its @aws-sdk/* imports, so no node_modules is
-# shipped to Lambda (small zip, fast cold starts).
+# @aws-sdk/* is left external on purpose: the Node 22 Lambda runtime ships AWS
+# SDK v3 (including lib-dynamodb), so the zip carries no node_modules.
 set -euo pipefail
 cd "$(dirname "$0")/.."   # repo root
 
@@ -29,7 +29,7 @@ if [ ! -s "$CRATES_SNAPSHOT" ]; then
 fi
 gzip -t "$CRATES_SNAPSHOT"
 
-for H in getCrates openCase sellItem getUser getInventory; do
+for H in getCrates getConfig openCase sellItem sellAllItems getUser getInventory; do
   echo "Bundling handler: $H"
   "$ESBUILD" "backend/src/handlers/$H.ts" \
     --bundle --platform=node --format=cjs --target=node22 \

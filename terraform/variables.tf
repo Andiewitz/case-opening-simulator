@@ -34,6 +34,26 @@ variable "cognito_google_client_secret" {
   default     = ""
 }
 
+# Additional browser origins allowed to call the API (the Amplify branch and,
+# outside prod, localhost are added automatically in lambda.tf).
+variable "extra_allowed_origins" {
+  description = "Extra CORS origins, e.g. [\"https://example.com\"]"
+  type        = list(string)
+  default     = []
+}
+
+variable "open_cooldown_ms" {
+  description = "Minimum milliseconds between two case opens for one account (0 disables the throttle)"
+  type        = number
+  default     = 400
+}
+
+variable "error_alarm_threshold" {
+  description = "Failed invocations per 5 minutes that trip a CloudWatch alarm"
+  type        = number
+  default     = 5
+}
+
 variable "lambda_memory_size" {
   description = "Memory size in MB for Lambda functions"
   type        = number

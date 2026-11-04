@@ -71,6 +71,11 @@ output "dynamodb_inventory_table_name" {
   description = "DynamoDB InventoryItems table name"
 }
 
+output "aws_github_deploy_role_arn" {
+  value       = var.github_repository != "" ? aws_iam_role.github_deploy[0].arn : null
+  description = "Role for GitHub Actions to assume via OIDC (set github_repository to create it)"
+}
+
 output "lambda_function_arns" {
   value = {
     for k, v in aws_lambda_function.handlers : k => v.arn
