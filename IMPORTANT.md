@@ -1,8 +1,8 @@
 # IMPORTANT — things that need your judgement
 
-Deploying now happens in GitHub Actions, and the two blockers that made that
-impossible are gone (details under "Resolved"). What is left is decisions, not
-work I can safely guess at. Nothing here stops the app from running today.
+Deploying happens in GitHub Actions now, and the two blockers that made that
+impossible are gone. What is left is decisions, not work I can safely guess at.
+Nothing here stops the app from running today.
 
 ---
 
@@ -11,65 +11,71 @@ work I can safely guess at. Nothing here stops the app from running today.
 - **Terraform state is remote.** `terraform/backend.tf` points at
   `s3://cs2-unboxed-tfstate-499867322589/cs2-unboxed/dev/terraform.tfstate`:
   versioned, AES256, all public access blocked, native `use_lockfile` locking
-  (no DynamoDB table). State was migrated with `-migrate-state`; the old local
-  file is gone (`terraform.tfstate.backup` is the pre-migration copy).
-- **AWS access no longer comes from your laptop's root session.** The workflow
-  assumes `arn:aws:iam::499867322589:role/cs2-unboxed-github-deploy-dev` via
+  (no DynamoDB table). State was migrated with `-migrate-state`.
+- **AWS access no longer comes from this laptop's root session.** The workflow
+  assumes `arn:aws:iam::499867322589:role/cs2-unboxed-github-deploy-dev` through
   GitHub OIDC, trusted only for `refs/heads/main` and the `production`
-  environment. The first run proved root had been masking a permission gap:
-  `cloudwatch:ListTagsForResource` was missing from the role, so `terraform
-  plan` failed with AccessDenied until it was added.
-- **Deploy workflow has run and passed.** Run
-  [`41888618160`](https://github.com/Andiewitz/case-opening-simulator/actions/runs/41888618160):
-  build → OIDC role → `terraform plan` (0 add, 8 change) → apply → Amplify job
-  `SUCCEED` → smoke checks (`frontend 200`, `spa route 200`, gzip `/crates`,
-  `/config`). It also now waits for the Amplify job before smoking, instead of
-  checking the previous build.
-- Repository variables `AWS_REGION`, `AMPLIFY_APP_ID`, `AMPLIFY_BRANCH`,
-  `API_BASE_URL`, `FRONTEND_URL` and the secret `AWS_ROLE_ARN` are set.
+  environment. Repository variables `AWS_REGION`, `AMPLIFY_APP_ID`,
+  `AMPLIFY_BRANCH`, `API_BASE_URL`, `FRONTEND_URL`, `COGNITO_CLIENT_ID` and the
+  secret `AWS_ROLE_ARN` are set.
+- **Deploy has run and passed in Actions.** Runs
+  [`41888618160`](https://github.com/Andiewitz/case-opening-simulator/actions/runs/41888618160)
+  (infrastructure + frontend) and
+  [`41890605584`](https://github.com/Andiewitz/case-opening-simulator/actions/runs/41890605584)
+  (frontend). The workflow now waits for the Amplify job before smoking the live
+  site — starting a deployment returns immediately, so the old check could pass
+  against the previous build.
+
+### Two things CI taught us the hard way
+
+- **The first CI build shipped a bundle with no API URL and no Cognito client.**
+  Those values lived only in the untracked `.env.local`; every request went to
+  the Amplify origin and sign-in could not refresh. Fixed by committing the
+  public values as `.env.production`, and the deploy now fetches the deployed
+  JavaScript and asserts the API URL and client id are inside it. A status-code
+  smoke check could never have caught this.
+- **Do not run `terraform apply` locally while a Deploy run is queued.** The
+  workflow applies a plan file it created earlier, so it can write a stale
+  resource over your newer change — that is exactly how the deploy role lost
+  `cloudwatch:ListTagsForResource` mid-deploy and failed two runs.
 
 ## 1. Who is allowed to ship, and how
 
-Today `Deploy` is `workflow_dispatch` only, so a human clicks it — I kept that
-because a push-to-main auto-deploy would put unreviewed commits in production
-with no gate.
+`Deploy` is `workflow_dispatch` only, so a human clicks it — a push-to-main
+auto-deploy would put unreviewed commits in production with no gate.
 
-**What I need from you:** pick one —
-(a) leave it manual (current),
-(b) auto-deploy the frontend on every push to `main`, infrastructure still
-manual, or
-(c) full auto-deploy on push.
-For (b)/(c) I'd also add a required reviewer to the `production` environment;
-that needs your admin rights (`Settings → Environments`), I can't set it for you.
+**What I need from you:** pick one — (a) leave it manual (current), (b)
+auto-deploy the frontend on push to `main` with infrastructure still manual, or
+(c) full auto-deploy on push. For (b)/(c) I'd add a required reviewer to the
+`production` environment, which needs your admin rights
+(`Settings → Environments`), I can't set that for you.
 
 ## 2. The state bucket has no deletion guard
 
-It is versioned and private, but nothing stops `terraform destroy`-style
-mistakes or an operator deleting the bucket. There is no `prevent_destroy` for
-backends, and MFA-delete is deprecated.
+It is versioned and private, but nothing stops an operator or a bad `destroy`
+from deleting it. There is no `prevent_destroy` for backends, and MFA-delete is
+deprecated.
 
 **What I need from you:** say the word and I'll add a bucket policy denying
-`DeleteBucket`/`PutBucketPolicy` except for root, plus a lifecycle rule keeping
-the last 30 noncurrent versions. It costs nothing and is the difference between
-a bad afternoon and a rebuild from scratch.
+`DeleteBucket`/`PutBucketPolicy` except root, plus a lifecycle rule keeping the
+last 30 noncurrent versions.
 
 ## 3. Alarms exist but nobody is notified
 
 Per-handler error alarms and the API 5XX alarm have **no actions**, so they only
 turn red on a dashboard.
 
-**What I need from you:** an email (or Slack/PagerDuty) destination. Then it's a
+**What I need from you:** an email (or Slack/PagerDuty) destination. Then it is a
 small `terraform/monitoring.tf` change with `alarm_email`.
 
 ## 4. `main` has no branch protection
 
-Direct pushes are allowed and CI is not required, even though CI now covers
-lint, typecheck, 86 unit tests, build, terraform fmt/validate and the Playwright
-reel test.
+Direct pushes are allowed and CI is not required, although CI now covers lint,
+typecheck, 86 unit tests, build, terraform fmt/validate and the Playwright reel
+test.
 
 **What I need from you:** say go and I'll wire it with `gh api` (require those
-three checks, block force-pushes). Merging that with item 1(a) is the sane
-combination.
+checks, block force-pushes). That plus item 1(a) is the sane combination.
 
 ## 5. Password reset is still missing
 
@@ -129,3 +135,6 @@ profiles would have to change this contract first.
   response's `remaining` makes that recoverable.
 - The reel's audio-synced timings in `CaseOpener.tsx` are untouchable; the
   Playwright test asserts the landing tile and offset, never the timing.
+- `.env.production` is committed on purpose: the values are public (API URL,
+  public app client) and CI has no `.env.local`. Keep it in step with
+  `terraform/` if the pool or API is ever recreated.
