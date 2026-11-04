@@ -18,14 +18,25 @@ export const handler = async (event: any): Promise<any> => {
     return json(400, { error: "Invalid JSON body" });
   }
 
-  const { crateId } = body;
-  if (!crateId) return json(400, { error: "Missing crateId" });
+  const { crateId, warmup } = body;
+  if (!crateId && warmup !== true) return json(400, { error: "Missing crateId" });
 
   try {
+    // Reading the user also warms the DynamoDB connection on a cold container.
+    // The lightweight warm-up request from the case page establishes the
+    // Cognito + DynamoDB + crate-pool path before the user clicks Open.
     const userSnap = await docClient.send(
       new GetCommand({ TableName: TABLE_USERS, Key: { userId } })
     );
     if (!userSnap.Item) return json(404, { error: "User not found" });
+
+    if (warmup === true) {
+      await loadCrates();
+      return json(200, { warm: true });
+    }
+
+    if (!crateId) return json(400, { error: "Missing crateId" });
+
     const user = userSnap.Item as any;
     if (user.balance < CASE_COST) return json(400, { error: "Insufficient balance" });
 

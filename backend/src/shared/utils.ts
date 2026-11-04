@@ -23,6 +23,9 @@ export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type,Authorization",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  // Let the warm-up preflight prime the browser cache so the actual open
+  // skips a second OPTIONS round trip.
+  "Access-Control-Max-Age": "600",
 };
 
 export function json(statusCode: number, body: unknown) {

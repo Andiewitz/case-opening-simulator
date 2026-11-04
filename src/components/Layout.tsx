@@ -2,11 +2,13 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { PackageOpen, Menu, X, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { signOut } from "../services/auth";
+import { useWarmCaseOpener } from "../hooks/useWarmCaseOpener";
 import AuthModal from "./AuthModal";
 
 export type LayoutContext = { openAuth: () => void };
 
 export default function Layout({ user }: { user: any }) {
+  useWarmCaseOpener(user);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const location = useLocation();
