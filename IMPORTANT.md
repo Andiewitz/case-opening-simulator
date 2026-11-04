@@ -1,112 +1,117 @@
 # IMPORTANT — things that need your judgement
 
-Everything else is done, committed and verified. These are the decisions I
-deliberately did **not** make for you, ordered by how much damage the wrong
-choice could do. Nothing here is blocking the app from working today.
+Deploying now happens in GitHub Actions, and the two blockers that made that
+impossible are gone (details under "Resolved"). What is left is decisions, not
+work I can safely guess at. Nothing here stops the app from running today.
 
 ---
 
-## 1. Terraform state is local, not remote — highest risk
+## Resolved tonight
 
-`terraform/terraform.tfstate` lives on this machine and is gitignored. If it is
-lost, Terraform no longer knows what exists, and `terraform apply` would try to
-recreate DynamoDB tables, the Cognito pool and the Lambdas.
+- **Terraform state is remote.** `terraform/backend.tf` points at
+  `s3://cs2-unboxed-tfstate-499867322589/cs2-unboxed/dev/terraform.tfstate`:
+  versioned, AES256, all public access blocked, native `use_lockfile` locking
+  (no DynamoDB table). State was migrated with `-migrate-state`; the old local
+  file is gone (`terraform.tfstate.backup` is the pre-migration copy).
+- **AWS access no longer comes from your laptop's root session.** The workflow
+  assumes `arn:aws:iam::499867322589:role/cs2-unboxed-github-deploy-dev` via
+  GitHub OIDC, trusted only for `refs/heads/main` and the `production`
+  environment. The first run proved root had been masking a permission gap:
+  `cloudwatch:ListTagsForResource` was missing from the role, so `terraform
+  plan` failed with AccessDenied until it was added.
+- **Deploy workflow has run and passed.** Run
+  [`41888618160`](https://github.com/Andiewitz/case-opening-simulator/actions/runs/41888618160):
+  build → OIDC role → `terraform plan` (0 add, 8 change) → apply → Amplify job
+  `SUCCEED` → smoke checks (`frontend 200`, `spa route 200`, gzip `/crates`,
+  `/config`). It also now waits for the Amplify job before smoking, instead of
+  checking the previous build.
+- Repository variables `AWS_REGION`, `AMPLIFY_APP_ID`, `AMPLIFY_BRANCH`,
+  `API_BASE_URL`, `FRONTEND_URL` and the secret `AWS_ROLE_ARN` are set.
 
-**What I need from you:** confirm a bucket/table name and a region, and I'll add
-an S3 backend (`terraform/backend.tf`) plus a `terraform init -migrate-state`.
+## 1. Who is allowed to ship, and how
 
-Current risk: one disk failure or accidental `git clean` away from rebuilding
-production by hand.
+Today `Deploy` is `workflow_dispatch` only, so a human clicks it — I kept that
+because a push-to-main auto-deploy would put unreviewed commits in production
+with no gate.
 
-## 2. The deploy used root AWS credentials
+**What I need from you:** pick one —
+(a) leave it manual (current),
+(b) auto-deploy the frontend on every push to `main`, infrastructure still
+manual, or
+(c) full auto-deploy on push.
+For (b)/(c) I'd also add a required reviewer to the `production` environment;
+that needs your admin rights (`Settings → Environments`), I can't set it for you.
 
-`aws sts get-caller-identity` returned
-`arn:aws:iam::499867322589:root`. That is what applied the infrastructure and
-uploaded the frontend.
+## 2. The state bucket has no deletion guard
 
-**What I need from you:** decide whether to keep using `aws login` locally (fine
-for a hobby project, risky for anything real). `terraform/github-oidc.tf` already
-defines a scoped deploy role — set `github_repository = "Andiewitz/case-opening-simulator"`
-in `terraform/terraform.tfvars`, apply once, then put that role's ARN in the
-`AWS_ROLE_ARN` repository secret.
+It is versioned and private, but nothing stops `terraform destroy`-style
+mistakes or an operator deleting the bucket. There is no `prevent_destroy` for
+backends, and MFA-delete is deprecated.
+
+**What I need from you:** say the word and I'll add a bucket policy denying
+`DeleteBucket`/`PutBucketPolicy` except for root, plus a lifecycle rule keeping
+the last 30 noncurrent versions. It costs nothing and is the difference between
+a bad afternoon and a rebuild from scratch.
 
 ## 3. Alarms exist but nobody is notified
 
-I added per-handler error alarms and an API 5XX alarm. They have **no actions**,
-so they only turn red on a dashboard.
+Per-handler error alarms and the API 5XX alarm have **no actions**, so they only
+turn red on a dashboard.
 
-**What I need from you:** an email (or Slack/PagerDuty) destination. Then H6 is a
-20-line `terraform/monitoring.tf` change with `alarm_email`.
+**What I need from you:** an email (or Slack/PagerDuty) destination. Then it's a
+small `terraform/monitoring.tf` change with `alarm_email`.
 
 ## 4. `main` has no branch protection
 
-Direct pushes are allowed and CI is not required. I did not change repository
-settings — that needs your admin rights.
+Direct pushes are allowed and CI is not required, even though CI now covers
+lint, typecheck, 86 unit tests, build, terraform fmt/validate and the Playwright
+reel test.
 
-**What I need from you:** say the word and I'll wire it with `gh api`
-(require `app`, `terraform`, `e2e` checks; block direct pushes).
+**What I need from you:** say go and I'll wire it with `gh api` (require those
+three checks, block force-pushes). Merging that with item 1(a) is the sane
+combination.
 
 ## 5. Password reset is still missing
 
-Sign-in, sign-up and email confirmation work. There is no "forgot password"
+Sign-in, sign-up and email confirmation work; there is no "forgot password"
 flow, so a locked-out user has no self-service route.
 
-**What I need from you:** the UX you want —
-(a) Cognito code by email (`ForgotPassword` → `ConfirmForgotPassword`), which
-reuses the existing modal and needs no new infrastructure, or
-(b) a magic-link flow, which needs Amplify/Cognito callback work.
-I'd do (a).
+**What I need from you:** (a) Cognito code by email (`ForgotPassword` →
+`ConfirmForgotPassword`), reusing the existing modal and needing no new
+infrastructure, or (b) a magic-link flow. I'd do (a).
 
-## 6. The S3 website origin is now off
+## 6. The legacy S3 website origin is off
 
-`public_website_interim` defaults to `false` and I applied it: the bucket is
-private and the legacy `http://<bucket>.s3-website-us-east-1.amazonaws.com` URL
-no longer serves the site. Amplify is the frontend of record.
+`public_website_interim = false` is applied: the bucket is private and
+`http://<bucket>.s3-website-us-east-1.amazonaws.com` no longer serves the site.
+Amplify is the frontend of record.
 
 **What I need from you:** confirm nothing still points at that HTTP URL (old
-bookmarks, a README elsewhere, a demo link). If something does, it is dead now —
-say so and I'll flip the variable back.
+bookmarks, a demo link, notes elsewhere). If something does, it is dead now.
 
 ## 7. `stable` is a tag and a branch, not a rewritten commit message
 
 `21f7ec3` is labelled by `stable`, `backup/pre-agent` and the annotated tag
-`stable-21f7ec3`. I did not amend its message because it is the tip of
-`origin/main` and rewriting it means force-pushing published history.
+`stable-21f7ec3`. I did not amend its message because it is published history.
 
-**What I need from you:** only if you specifically want the commit subject to
-read `[stable] …` — then I'll rebase and force-push with those refs as the
-recovery path.
+**What I need from you:** only if you specifically want the subject to read
+`[stable] …` — then I'll rebase and force-push, with those refs as recovery.
 
-## 8. Deploy is still manual by my hand, not by CI
+## 8. Nine moderate npm advisories, all in the ESLint toolchain
 
-`.github/workflows/deploy.yml` exists but has never run: it needs repository
-variables (`AWS_REGION`, `AMPLIFY_APP_ID`, `AMPLIFY_BRANCH`, `API_BASE_URL`,
-`FRONTEND_URL`, `TF_STATE_BUCKET`, `TF_STATE_KEY`) and the `AWS_ROLE_ARN` secret.
-
-**Checked:** `gh variable list` and `gh secret list` are both empty, and
-`gh run list --workflow=deploy.yml` returns nothing — the workflow has never
-run. Every production change so far (infrastructure and frontend) was applied
-from this laptop with the root credentials, so the audit trail is a local shell
-history rather than a workflow run.
-
-**What I need from you:** decide whether CI should own deploys (safer, auditable)
-or you keep applying locally. If CI, I'll set the variables once the OIDC role
-exists.
-
-## 9. Nine moderate npm advisories remain
-
-All in the ESLint toolchain (`minimatch` DoS). `npm audit --audit-level=high`
-passes, so CI is green. Clearing them means ESLint 10 + a flat-config migration,
-which can change lint behaviour.
+`npm audit --audit-level=high` passes, so CI is green. Dependabot's ESLint group
+PR fails both the app and e2e jobs: clearing it means ESLint 10 plus a
+flat-config migration that can change lint behaviour.
 
 **What I need from you:** upgrade now (I'll keep the rule set identical and show
-any new findings) or leave them for the next dependency sweep.
+any new findings) or leave it for the next dependency sweep. The narrower bumps
+(jsdom, `globals`, `motion`, `setup-node`, `setup-terraform`) pass and are safe.
 
-## 10. One product decision I made for you
+## 9. One product decision I made for you
 
 `GET /users/{userId}` ignores the id in the path and always returns the token's
-account — deliberate, so accounts cannot read each other. If you ever want an
-admin view or public profiles, this is the contract that has to change first.
+account — deliberate, so accounts cannot read each other. Admin views or public
+profiles would have to change this contract first.
 
 **What I need from you:** confirm that is still the intent.
 
@@ -122,5 +127,5 @@ admin view or public profiles, this is the contract that has to change first.
   ([decisions/0003](docs/decisions/0003-password-auth-via-cognito-json.md)).
 - `sell-all` is atomic per 99-item chunk, not for the whole inventory — the
   response's `remaining` makes that recoverable.
-- The reel's audio-synced timings in `CaseOpener.tsx` are untouchable; the new
+- The reel's audio-synced timings in `CaseOpener.tsx` are untouchable; the
   Playwright test asserts the landing tile and offset, never the timing.
