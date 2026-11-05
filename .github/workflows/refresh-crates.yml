@@ -1,7 +1,9 @@
-name: Refresh crates snapshot
+name: Refresh baked snapshots
 
-# Upstream (ByMykel/CSGO-API) adds and retires cases continuously. The backend
-# serves a baked snapshot, so without this the pool drifts for months.
+# Upstream data drifts: ByMykel/CSGO-API adds and retires cases, only exists in
+# some wears, and Steam prices move. The backend serves baked snapshots, so a
+# scheduled refresh keeps the drop pool and the values current without putting
+# a network fetch on the case-open path.
 on:
   schedule:
     - cron: "17 4 * * 1" # Mondays, 04:17 UTC
@@ -24,26 +26,41 @@ jobs:
 
       - run: npm ci
 
-      # Re-bakes only when the projection actually changed; the script writes
-      # the same bytes otherwise, so the diff stays empty and no PR is opened.
-      - name: Re-bake snapshot
+      # Re-bakes only when the projection actually changed; the crate script
+      # writes the same bytes otherwise, so the diff stays empty.
+      - name: Re-bake crate snapshot
         run: npm run bake-crates
+
+      # This one talks to the public Steam mirrors and cantry.dev. The output
+      # only changes when a quote or its timestamp changes.
+      - name: Re-bake price snapshot
+        run: npm run bake-prices
 
       - name: Report the new pool size
         run: npm run check:crates
 
+      - name: Report price coverage and known collector value
+        run: npm run check:prices
+
       - name: Open or update the refresh PR
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: chore/refresh-crates
-          title: "chore: refresh crates snapshot"
-          commit-message: "chore: refresh crates snapshot from upstream"
+          branch: chore/refresh-snapshots
+          title: "chore: refresh baked snapshots"
+          commit-message: "chore: refresh baked crates and Steam prices"
           body: |
-            Automated refresh of `backend/src/shared/crates.json.gz` from
-            ByMykel/CSGO-API, produced by `npm run bake-crates`.
+            Automated refresh of the two deployment snapshots:
 
-            Review the crate/item counts in the job log and spot-check any new
-            case before merging. CI's snapshot freshness gate fails after 120
-            days, so an unmerged PR will eventually turn the build red.
-          add-paths: backend/src/shared/crates.json.gz
+            - `backend/src/shared/crates.json.gz` from ByMykel/CSGO-API
+            - `backend/src/shared/prices.json.gz` from Steam market mirrors,
+              with cantry.dev collector references for items Steam cannot price
+
+            Produced by `npm run bake-crates` and `npm run bake-prices`. Review
+            the crate/item counts and price coverage in the job log, and
+            spot-check any new case or high-value item before merging. CI's
+            freshness gates fail after 120 days for crates and 180 days for
+            prices, so an unmerged PR will eventually turn the build red.
+          add-paths: |
+            backend/src/shared/crates.json.gz
+            backend/src/shared/prices.json.gz
           delete-branch: true

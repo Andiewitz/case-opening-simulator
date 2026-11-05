@@ -51,6 +51,11 @@ jobs:
       - name: Crates snapshot freshness
         run: npm run check:crates
 
+      # Fails when the Steam price snapshot is missing, too sparse, or has lost
+      # the known collector item that motivated the reference feed.
+      - name: Price snapshot freshness
+        run: npm run check:prices
+
       # Blocks on high/critical advisories in the dependency graph. Moderate
       # advisories in the lint toolchain are tracked by Dependabot.
       - name: Dependency audit

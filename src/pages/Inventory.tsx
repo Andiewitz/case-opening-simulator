@@ -218,6 +218,11 @@ export default function Inventory({ user }: { user: any }) {
                                                     ST™
                                                 </span>
                                             )}
+                                            {item.priceSource && item.priceSource !== "steam" && (
+                                                <span className="uo-chip" title={item.priceProvider || undefined}>
+                                                    {item.priceSource === "reference" ? "Ref" : "Est."}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
 

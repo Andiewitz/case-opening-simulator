@@ -171,4 +171,38 @@ describe("price and condition", () => {
     const b = simulatePriceAndCondition(plain, false, fixedRng(0.25));
     expect(a).toEqual(b);
   });
+
+  it("uses the injected Steam quote instead of the generated ladder", () => {
+    const result = simulatePriceAndCondition(
+      plain,
+      false,
+      sequenceRng(0.5, 0.5, 0.5, 0.5, 0.9),
+      () => ({ price: 31.68, source: "steam", provider: "Steam Community Market" })
+    );
+    expect(result.price).toBe(31.68);
+    expect(result.priceSource).toBe("steam");
+    expect(result.priceProvider).toBe("Steam Community Market");
+  });
+
+  it("uses a reference quote when the item has no Steam listing", () => {
+    const result = simulatePriceAndCondition(
+      { id: "sticker-reason", name: "Reason Gaming (Holo) | Katowice 2014", rarity: RARITY.purple },
+      false,
+      fixedRng(0.5),
+      () => ({ price: 43032.77, source: "reference", provider: "YouPin898 via cantry.dev" })
+    );
+    expect(result.price).toBe(43032.77);
+    expect(result.priceSource).toBe("reference");
+  });
+
+  it("labels the generated ladder as an estimate when no quote exists", () => {
+    const result = simulatePriceAndCondition(
+      plain,
+      false,
+      sequenceRng(0.5, 0.5, 0.5, 0.5, 0.9),
+      () => null
+    );
+    expect(result.priceSource).toBe("estimated");
+    expect(result.priceProvider).toBe("Rarity estimate");
+  });
 });

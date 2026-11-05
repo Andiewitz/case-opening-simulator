@@ -14,6 +14,7 @@ import {
 import { ensureUser } from "../shared/users";
 import { generateCaseRoll } from "../shared/simulation";
 import { loadCrates } from "../shared/crates";
+import { priceSnapshotLoaded } from "../shared/prices";
 import { CASE_COST, MAX_INVENTORY_ITEMS, openCooldownMs } from "../config";
 
 type OpenConflict = { statusCode: number; code: string; error: string };
@@ -73,7 +74,10 @@ export const handler = async (event: any): Promise<any> => {
 
     if (warmup === true) {
       await loadCrates();
-      return json(event, 200, { warm: true });
+      // Parsing the price snapshot is part of the first-open cost. Do it here
+      // too so the user's click does not pay for both snapshots.
+      priceSnapshotLoaded();
+      return json(event, 200, { warm: true, prices: priceSnapshotLoaded() });
     }
 
     if (typeof crateId !== "string") return json(event, 400, { error: "Missing crateId" });
@@ -113,10 +117,15 @@ export const handler = async (event: any): Promise<any> => {
       color: colorHex,
       image: winner.image || "",
       price: winner.price || 0,
-      condition: winner.condition || "Factory New",
+      priceSource: winner.priceSource || "estimated",
+      priceProvider: winner.priceProvider || null,
+      priceUpdatedAt: winner.priceUpdatedAt || null,
+      // Stickers and vanilla knives legitimately have no condition/float, and
+      // stickers have no pattern. Preserve null instead of inventing values.
+      condition: winner.condition ?? null,
       isStatTrak: winner.isStatTrak || false,
-      pattern: winner.pattern || 1,
-      float: winner.float || 0.05,
+      pattern: winner.pattern ?? null,
+      float: winner.float ?? null,
       phase: winner.phase || null,
       createdAt: new Date(now).toISOString(),
     };

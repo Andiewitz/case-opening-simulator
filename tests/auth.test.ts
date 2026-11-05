@@ -54,6 +54,24 @@ describe("decodeJwt", () => {
     expect(decodeJwt(jwt({ name: "★ Karambit — Doppler" })).name).toBe("★ Karambit — Doppler");
   });
 
+  it("restores base64url padding before calling atob", () => {
+    const payload = base64url({ sub: "abc" }); // 18 chars: needs two '='
+    const calls: string[] = [];
+    const realAtob = globalThis.atob;
+    vi.stubGlobal("atob", (value: string) => {
+      calls.push(value);
+      return realAtob(value);
+    });
+
+    try {
+      expect(decodeJwt(`header.${payload}.signature`)).toEqual({ sub: "abc" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(calls[0]).toBe(`${payload}==`);
+  });
+
   it("returns an empty object for anything it cannot parse", () => {
     expect(decodeJwt("")).toEqual({});
     expect(decodeJwt("not-a-token")).toEqual({});

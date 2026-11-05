@@ -115,9 +115,12 @@ export function decodeJwt(token: string): any {
   try {
     const parts = token.split(".");
     if (parts.length < 2) return {};
-    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "");
+    // JWT payloads are base64url and omit padding. `atob` is not consistently
+    // forgiving across browsers, so restore the padding before decoding.
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
     const json = decodeURIComponent(
-      atob(base64)
+      atob(padded)
         .split("")
         .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
         .join("")

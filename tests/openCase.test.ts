@@ -80,6 +80,8 @@ describe("opening a case", () => {
     expect(body).toMatchObject({ userId: "user-1", name: expect.any(String) });
     expect(body.price).toBeGreaterThan(0);
     expect(body.id).toBe(body.itemId);
+    expect(["steam", "reference", "estimated"]).toContain(body.priceSource);
+    expect(body.priceProvider).toEqual(expect.any(String));
 
     const stored = user();
     expect(stored.balance).toBeCloseTo(10 - CASE_COST, 2);
@@ -91,6 +93,9 @@ describe("opening a case", () => {
     const items = harness.db.rows(TABLES.inventory);
     expect(items).toHaveLength(1);
     expect(items[0].itemId).toBe(body.itemId);
+    expect(items[0].priceSource).toBe(body.priceSource);
+    expect(items[0].priceProvider).toBe(body.priceProvider);
+    expect(items[0].priceUpdatedAt).toBe(body.priceUpdatedAt);
   });
 
   it("refuses when the balance cannot cover the case", async () => {
@@ -116,7 +121,7 @@ describe("opening a case", () => {
     const response = await handler(apiEvent({ body: JSON.stringify({ warmup: true }) }));
 
     expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)).toEqual({ warm: true });
+    expect(JSON.parse(response.body)).toMatchObject({ warm: true });
     expect(user().balance).toBe(10);
     expect(harness.db.rows(TABLES.inventory)).toHaveLength(0);
   });

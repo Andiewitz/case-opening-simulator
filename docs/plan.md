@@ -31,15 +31,17 @@ Measured after implementation (Node 26.13.0, npm 11.20.0):
 
 | Check | Result |
 |---|---|
-| `npm run check` (lint → typecheck → test → build) | passes |
-| Tests | 84 across 6 files, no AWS credentials |
-| Frontend bundle | 429.97 kB raw / 137.95 kB gzip (was 579.52 / 183.87) |
-| `npm run build:backend` | 7 handler bundles + `crates.json.gz` (992 KB) |
+| `npm run check` (lint → typecheck → test → snapshot checks → build) | passes |
+| Tests | 102 across 7 files, no AWS credentials |
+| Frontend bundle | 430.63 kB raw / 138.25 kB gzip (was 579.52 / 183.87) |
+| `npm run build:backend` | 7 handler bundles + `crates.json.gz` (992 KB) + `prices.json.gz` (342 KB) |
 | `npm run check:crates` | 281 crates, 12,347 items |
+| `npm run check:prices` | 18,092/19,912 variants quoted (90.9%; 18,004 Steam, 88 reference) |
 | `terraform fmt -check -recursive` + `validate` | clean |
 | `actionlint` on `.github/workflows/*.yml` | clean |
 | `npm audit --audit-level=high` | passes (0 high/critical; 11 moderate, all lint-tooling) |
-| Expected payout | $6.74 per $2.50 open (200k seeded rolls over the real snapshot) |
+| Expected payout (weapon cases) | $6.46 per $2.50 open (100k seeded rolls over the real snapshot) |
+| Expected payout (all crates) | $41.87 per $2.50 open — sticker capsules are the outlier, see docs/economy.md |
 
 This is the working plan for turning CS2 Unboxed from "works on my machine and
 deploys by hand" into something a second person can safely change. Items are

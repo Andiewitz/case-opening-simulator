@@ -71,7 +71,7 @@ small `terraform/monitoring.tf` change with `alarm_email`.
 ## 4. `main` has no branch protection
 
 Direct pushes are allowed and CI is not required, although CI now covers lint,
-typecheck, 86 unit tests, build, terraform fmt/validate and the Playwright reel
+typecheck, 102 unit tests, build, terraform fmt/validate and the Playwright reel
 test.
 
 **What I need from you:** say go and I'll wire it with `gh api` (require those
@@ -121,6 +121,26 @@ profiles would have to change this contract first.
 
 **What I need from you:** confirm that is still the intent.
 
+## 10. Real collector prices make sticker capsules extremely profitable
+
+`CASE_COST` is still a flat $2.50 for every crate. The Steam-price snapshot now
+uses the cantry.dev collector reference for Katowice 2014 stickers because Steam
+has no active listings: Reason Gaming (Holo) is $43,032.77, Titan (Holo) is
+$66,479.70, and iBUYPOWER (Holo) is $63,542.67. Those stickers sit in the purple
+tier of the EMS Katowice 2014 capsule, so opening that capsule for $2.50 has an
+expected payout far above the weapon-case average (about $6.46). The full
+snapshot P&L warning is in [docs/economy.md](docs/economy.md).
+
+This is a real product choice, not a bug in the lookup: the item is genuinely
+worth that much, and the user asked for the real value. I did not silently
+change the charge.
+
+**What I need from you:** pick one — (a) accept the generous virtual economy,
+(b) add a per-crate price so collector capsules cost more, or (c) exclude the
+collector-reference tier from capsule drop pools while keeping it visible in the
+inventory. (b) is the most realistic; it needs a small frontend/API change
+because `GET /config` currently exposes one global `caseCost`.
+
 ---
 
 ## Already decided, for the record
@@ -129,6 +149,9 @@ profiles would have to change this contract first.
   ([decisions/0001](docs/decisions/0001-server-side-rolls.md)).
 - Crate pool is baked into the deployment
   ([decisions/0002](docs/decisions/0002-baked-crates-snapshot.md)).
+- Steam prices are baked into the same deployment artifact. Opens never fetch
+  from Steam; every item records whether its value is `steam`, `reference` or
+  `estimated`.
 - Password auth via raw Cognito JSON calls; hosted UI deleted
   ([decisions/0003](docs/decisions/0003-password-auth-via-cognito-json.md)).
 - `sell-all` is atomic per 99-item chunk, not for the whole inventory — the

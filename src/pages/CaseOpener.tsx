@@ -383,6 +383,11 @@ export default function CaseOpener({ user }: { user: any }) {
                                     )}
                                     {winningItem.phase && <span className="uo-chip" style={{ color: "#9aa3ff" }}>{winningItem.phase}</span>}
                                     {winningItem.isStatTrak && <span className="uo-chip" style={{ color: "#f0902a" }}>StatTrak™</span>}
+                                    {winningItem.priceSource && winningItem.priceSource !== "steam" && (
+                                        <span className="uo-chip" title={winningItem.priceProvider || undefined}>
+                                            {winningItem.priceSource === "reference" ? "Collector ref" : "Estimate"}
+                                        </span>
+                                    )}
                                 </motion.div>
 
                                 <motion.div

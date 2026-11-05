@@ -30,10 +30,12 @@ storefront's error state.
 | `npm run lint` | ESLint (flat config, typescript-eslint + react-hooks) |
 | `npm run typecheck` | `tsc --noEmit` for the frontend and the backend |
 | `npm test` | Vitest, all suites (no AWS credentials needed) |
-| `npm run check` | lint → typecheck → test → build (what CI runs first) |
+| `npm run check` | lint → typecheck → test → snapshot checks → build |
 | `npm run build:backend` | Bundle the Lambda handlers into `backend/dist/` |
 | `npm run bake-crates` | Refresh the baked crate snapshot from upstream |
-| `npm run check:crates` | Fail if the snapshot is missing, malformed or stale |
+| `npm run bake-prices` | Refresh the baked Steam price snapshot |
+| `npm run check:crates` | Fail if the crate snapshot is missing, malformed or stale |
+| `npm run check:prices` | Fail if the price snapshot is missing, sparse or stale |
 
 ## Environment variables
 
@@ -65,6 +67,11 @@ Backend (Lambda environment, set in `terraform/lambda.tf`):
 - **Crate data** — the upstream feed is baked into
   `backend/src/shared/crates.json.gz` at build time, so cold starts never fetch
   it. `refresh-crates.yml` re-bakes it weekly.
+- **Prices** — the exact Steam market quote for the rolled wear/StatTrak
+  variant comes from `backend/src/shared/prices.json.gz`, also baked at build
+  time. There is no Steam call on the open path. Old collector stickers that
+  Steam cannot price use a labelled cantry.dev reference; the rest fall back to
+  a labelled estimate. See [docs/economy.md](docs/economy.md).
 - **Infrastructure** — `terraform/`. Amplify Hosting serves the frontend today;
   CloudFront is behind `enable_cloudfront` (see
   [docs/aws-cloudfront-verification.md](docs/aws-cloudfront-verification.md)).

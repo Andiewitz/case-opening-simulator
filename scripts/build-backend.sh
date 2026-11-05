@@ -11,6 +11,7 @@ cd "$(dirname "$0")/.."   # repo root
 ESBUILD=./node_modules/.bin/esbuild
 OUT=backend/dist
 CRATES_SNAPSHOT=backend/src/shared/crates.json.gz
+PRICES_SNAPSHOT=backend/src/shared/prices.json.gz
 mkdir -p "$OUT"
 
 # The crate pool is baked into the deployment package at build time so
@@ -29,6 +30,21 @@ if [ ! -s "$CRATES_SNAPSHOT" ]; then
 fi
 gzip -t "$CRATES_SNAPSHOT"
 
+# Steam prices are baked separately from the crate pool. Refresh when the
+# market snapshot is regenerated:
+#   REFRESH_PRICES=1 ./scripts/build-backend.sh
+# or: npm run bake-prices
+if [ ! -f "$PRICES_SNAPSHOT" ] || [ "${REFRESH_PRICES:-0}" = "1" ]; then
+  echo "Baking Steam price snapshot..."
+  ./node_modules/.bin/tsx scripts/bake-prices.ts
+fi
+
+if [ ! -s "$PRICES_SNAPSHOT" ]; then
+  echo "Missing or empty price snapshot: $PRICES_SNAPSHOT" >&2
+  exit 1
+fi
+gzip -t "$PRICES_SNAPSHOT"
+
 for H in getCrates getConfig openCase sellItem sellAllItems getUser getInventory; do
   echo "Bundling handler: $H"
   "$ESBUILD" "backend/src/handlers/$H.ts" \
@@ -38,9 +54,10 @@ for H in getCrates getConfig openCase sellItem sellAllItems getUser getInventory
     --outfile="$OUT/$H.js"
 done
 
-# Ship the baked snapshot at the Lambda package root. crates.ts resolves it
-# from process.cwd() (/var/task in Lambda).
+# Ship the baked snapshots at the Lambda package root. crates.ts and prices.ts
+# resolve them from process.cwd() (/var/task in Lambda).
 cp "$CRATES_SNAPSHOT" "$OUT/crates.json.gz"
+cp "$PRICES_SNAPSHOT" "$OUT/prices.json.gz"
 
 echo "Backend build complete:"
 ls -la "$OUT"

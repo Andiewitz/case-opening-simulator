@@ -12,7 +12,8 @@ API Gateway REST  ──►  one Lambda per route (backend/src/handlers/)
   │                        │
   │                        ├─ verify token: cognito-idp GetUser
   │                        ├─ read/write:   DynamoDB (users, inventory-items)
-  │                        └─ crate pool:   crates.json.gz baked into the zip
+  │                        ├─ crate pool:   crates.json.gz baked into the zip
+  │                        └─ price data:   prices.json.gz baked into the zip
   │
   └─ CORS: exact-origin echo · errors: JSON with `code` · logs: JSON to CloudWatch
 ```
@@ -21,7 +22,8 @@ API Gateway REST  ──►  one Lambda per route (backend/src/handlers/)
 
 1. `CaseOpener` mounts and calls `POST /cases/open` with `{ warmup: true }`
    (throttled to once per two minutes). Same Lambda, so this warms Cognito,
-   DynamoDB and the crate pool before the user clicks. It writes nothing.
+   DynamoDB, the crate pool and the Steam price snapshot before the user clicks.
+   It writes nothing.
 2. The user clicks Open. The client sends `{ crateId }` with its access token.
 3. `openCase` verifies the token (`GetUser` → the username is the user id),
    checks the origin, and seeds/fetches the account row (`ensureUser`).
@@ -57,7 +59,9 @@ Shared modules in `backend/src/shared/`:
 - `users.ts` — `ensureUser` (idempotent seed + legacy row repair),
   `countInventory` (paged count).
 - `inventory.ts` — `listInventory` (one page + cursor), `listAllInventory`.
-- `simulation.ts` — the entire economy: drop table, price/condition/pattern.
+- `simulation.ts` — the entire economy: drop table, condition/pattern/StatTrak.
+- `prices.ts` — baked Steam price lookup, exact market-name construction, wear
+  and StatTrak availability, and labelled fallbacks.
 - `crates.ts` / `cratesData.ts` — baked snapshot loading and feed projection.
 
 ## DynamoDB key design

@@ -53,19 +53,30 @@ curl -s -o /dev/null -w '%{http_code}\n' "$FRONTEND/inventory"   # expect 200, n
 `/inventory` returning 404 means the Amplify SPA rewrite rule is missing — the
 site works until someone refreshes a deep link.
 
-## Refresh the crates snapshot
+## Refresh the baked crates and prices
 
-The pool is baked at build time; nothing is fetched at runtime.
+Both datasets are baked at build time; nothing is fetched at runtime.
 
 ```sh
 npm run bake-crates      # rewrites backend/src/shared/crates.json.gz
+npm run bake-prices      # rewrites backend/src/shared/prices.json.gz
 npm run check:crates     # parses it and reports count + age
+npm run check:prices     # coverage, Reason Holo, Steam snapshot age
 npm run build:backend && (cd terraform && terraform apply)
 ```
 
-`refresh-crates.yml` does the first step weekly and opens a PR. Merge it, then
-deploy. CI fails when the snapshot is older than 120 days, so a stalled PR
-cannot rot silently.
+`refresh-crates.yml` does this weekly and opens a PR. Merge it, then deploy. CI
+fails when the crate snapshot is older than 120 days or the Steam price snapshot
+is older than 180 days, so a stalled PR cannot rot silently.
+
+The price bake needs network access to the public Steam mirrors and cantry.dev.
+If a source is down, the script keeps the other sources and fails only when the
+known Reason Gaming Holo reference disappears. The committed snapshot remains
+usable; re-run the bake later.
+
+`/config` reports `pricesAsOf` (newest Steam quote) and
+`priceReferencesAsOf` (newest collector reference) so you can verify what the
+deployed Lambda is serving.
 
 ## Roll back
 

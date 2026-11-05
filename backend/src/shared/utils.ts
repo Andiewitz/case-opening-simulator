@@ -99,7 +99,11 @@ export function logFailure(event: any, name: string, error: any, fields: Record<
 
 export async function getUserIdFromAccessToken(accessToken: string): Promise<string> {
   const out = await cognitoClient.send(new GetUserCommand({ AccessToken: accessToken }));
-  // Cognito returns Username as the sub/userId
+  // The user pool uses username_attributes = ["email"], so Cognito's Username
+  // is the email address, not the immutable `sub`. DynamoDB rows are keyed by
+  // this value today; switching to `sub` would orphan every existing user and
+  // inventory row without a migration. Keep the stable partition key, but do
+  // not describe it as the sub in new code.
   return out.Username!;
 }
 

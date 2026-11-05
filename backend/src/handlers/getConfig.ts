@@ -1,4 +1,5 @@
 import { preflight } from "../shared/utils";
+import { getPriceSnapshotMeta } from "../shared/prices";
 import { CASE_COST, MAX_INVENTORY_ITEMS, STARTING_BALANCE } from "../config";
 
 const CACHE = "public, max-age=300, stale-while-revalidate=3600";
@@ -13,6 +14,7 @@ const CACHE = "public, max-age=300, stale-while-revalidate=3600";
 export const handler = async (event: any): Promise<any> => {
   if (event.httpMethod === "OPTIONS") return preflight(event);
 
+  const prices = getPriceSnapshotMeta();
   return {
     statusCode: 200,
     headers: { ...preflight(event).headers, "Cache-Control": CACHE },
@@ -20,6 +22,9 @@ export const handler = async (event: any): Promise<any> => {
       caseCost: CASE_COST,
       startingBalance: STARTING_BALANCE,
       maxInventoryItems: MAX_INVENTORY_ITEMS,
+      pricesAsOf: prices?.asOf ?? null,
+      priceReferencesAsOf: prices?.referenceAsOf ?? null,
+      priceCurrency: prices?.currency ?? "USD",
     }),
   };
 };

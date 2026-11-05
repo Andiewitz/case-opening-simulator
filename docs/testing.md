@@ -15,7 +15,8 @@ npm run check         # lint + typecheck + test + build (same as CI)
 
 | File | Covers | Plan id |
 |---|---|---|
-| `tests/simulation.test.ts` | drop table + band boundaries, 200k-roll rate check, condition ladder, blue gems, Doppler, StatTrak, stickers | T1–T3 |
+| `tests/simulation.test.ts` | drop table + band boundaries, 200k-roll rate check, condition ladder, blue gems, Doppler, StatTrak, stickers, injected price quotes | T1–T3 |
+| `tests/prices.test.ts` | market hash names, exact/StatTrak/sticker lookup, scaled-wear fallback, wear/StatTrak availability | — |
 | `tests/cratesData.test.ts` | feed projection, CDN-prefix stripping, baked snapshot integrity | T4 |
 | `tests/openCase.test.ts` | auth/validation, happy path, insufficient balance, inventory full, warm-up, concurrency, throttle, origin checks | T5 |
 | `tests/inventory.test.ts` | sell (stored price, double-sell, other users), inventory pagination, profile seeding/repair, sell-all | T6 |
@@ -55,8 +56,11 @@ passes proves the expression string is right, not merely present.
 
 ## Deterministic rolls
 
-`generateCaseRoll(crate, rng)` and `simulatePriceAndCondition(item, special, rng)`
-take an optional `rng` defaulting to `Math.random`. `tests/helpers/fixtures.ts`
+`generateCaseRoll(crate, rng, priceLookup)` and
+`simulatePriceAndCondition(item, special, rng, priceLookup)` take an optional
+`rng` defaulting to `Math.random` and an optional price lookup defaulting to the
+baked Steam snapshot. Tests that pin the old generated ladder pass `null` for
+the lookup or a resolver returning a fixed quote. `tests/helpers/fixtures.ts`
 provides:
 
 - `fixedRng(v)` — every call returns `v`.

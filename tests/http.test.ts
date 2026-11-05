@@ -71,11 +71,12 @@ describe("GET /config", () => {
     const response = await getConfigHandler(apiEvent({ httpMethod: "GET", body: null }));
 
     expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)).toEqual({
+    expect(JSON.parse(response.body)).toMatchObject({
       caseCost: CASE_COST,
       startingBalance: STARTING_BALANCE,
       maxInventoryItems: MAX_INVENTORY_ITEMS,
     });
+    expect(JSON.parse(response.body).priceCurrency).toBe("USD");
     expect(response.headers["Cache-Control"]).toContain("public");
   });
 });

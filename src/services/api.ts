@@ -50,6 +50,9 @@ export type EconomyConfig = {
   caseCost: number;
   startingBalance: number;
   maxInventoryItems: number;
+  pricesAsOf?: string | null;
+  priceReferencesAsOf?: string | null;
+  priceCurrency?: string;
 };
 
 export async function getConfig(): Promise<EconomyConfig> {

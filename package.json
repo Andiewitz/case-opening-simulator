@@ -16,14 +16,16 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "bake-crates": "tsx scripts/bake-crates.ts",
+    "bake-prices": "tsx scripts/bake-prices.ts",
     "check:crates": "tsx scripts/check-crates-snapshot.ts",
+    "check:prices": "tsx scripts/check-prices-snapshot.ts",
     "build:backend": "./scripts/build-backend.sh",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p backend/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run check:crates && npm run check:prices && npm run build"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

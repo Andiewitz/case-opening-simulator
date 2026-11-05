@@ -32,8 +32,18 @@ is the user id, so the `{userId}` in a path is never trusted.
 Public. The single source of truth for economy numbers the UI displays.
 
 ```json
-{ "caseCost": 2.5, "startingBalance": 100, "maxInventoryItems": 500 }
+{
+  "caseCost": 2.5,
+  "startingBalance": 100,
+  "maxInventoryItems": 500,
+  "pricesAsOf": "2026-10-29T00:40:24.610Z",
+  "priceReferencesAsOf": "2026-11-05T08:22:36.986Z",
+  "priceCurrency": "USD"
+}
 ```
+
+`pricesAsOf` is the newest Steam quote in the baked snapshot; collector
+references have their own timestamp because Steam cannot price those items.
 
 `caseCost` is `CASE_COST` in `backend/src/config.ts`; the storefront, the case
 page and the button state all read it from here, so changing the constant
@@ -72,6 +82,9 @@ Success `200` — the rolled item, priced server-side:
   "color": "#eb4b4b",
   "image": "…",
   "price": 42.17,
+  "priceSource": "steam",
+  "priceProvider": "Steam Community Market",
+  "priceUpdatedAt": "2026-10-28T23:31:22.192Z",
   "condition": "Field-Tested",
   "isStatTrak": false,
   "pattern": 512,
@@ -80,6 +93,11 @@ Success `200` — the rolled item, priced server-side:
   "createdAt": "2026-11-04T10:00:00.000Z"
 }
 ```
+
+`priceSource` is `steam`, `reference` or `estimated`; `priceProvider` names the
+feed or fallback. Stickers and vanilla knives legitimately return `null` for
+`condition`, `float` and/or `pattern`. The price is always computed on the
+server and stored with the item.
 
 Errors:
 
