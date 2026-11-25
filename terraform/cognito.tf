@@ -27,6 +27,7 @@ locals {
   auth_origins = compact(concat(
     ["http://localhost:5173", "http://localhost:3001"],
     (var.frontend_domain != "" ? ["https://${var.frontend_domain}"] : []),
+    (var.custom_domain != "" ? ["https://${var.custom_domain}"] : []),
   ))
 }
 

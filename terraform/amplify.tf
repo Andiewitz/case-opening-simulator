@@ -38,3 +38,32 @@ resource "aws_amplify_branch" "main" {
   # enabled by default; keep it to avoid drift in plan.
   enable_auto_build = true
 }
+
+# Optional readable domain (e.g. a free "cs2unboxed.is-a.dev" subdomain).
+# Empty (the default) leaves the app on the *.amplifyapp.com URL. When set,
+# Amplify provisions an AWS-managed ACM cert and the apply output lists the
+# CNAME records to add at your DNS provider.
+variable "custom_domain" {
+  description = "Optional custom domain for the frontend, e.g. \"cs2unboxed.is-a.dev\". Empty disables."
+  type        = string
+  default     = ""
+}
+
+resource "aws_amplify_domain_association" "main" {
+  count = var.custom_domain != "" ? 1 : 0
+
+  app_id      = aws_amplify_app.frontend.id
+  domain_name = var.custom_domain
+
+  # Don't block apply waiting for ACM to validate: the validation CNAME only
+  # exists after we add it at the DNS provider, which is a manual step. The
+  # association is created immediately and the cert validates async once the
+  # records are in place.
+  wait_for_verification = false
+
+  # Empty prefix = the apex of custom_domain (the full subdomain you registered).
+  sub_domain {
+    prefix      = ""
+    branch_name = aws_amplify_branch.main.branch_name
+  }
+}

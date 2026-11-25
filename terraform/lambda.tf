@@ -21,6 +21,7 @@ locals {
   allowed_origins = join(",", distinct(concat(
     var.environment == "prod" ? [] : ["http://localhost:3000"],
     ["https://${aws_amplify_branch.main.branch_name}.${aws_amplify_app.frontend.default_domain}"],
+    var.custom_domain != "" ? ["https://${var.custom_domain}"] : [],
     var.extra_allowed_origins
   )))
 }

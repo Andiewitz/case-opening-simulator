@@ -76,6 +76,19 @@ output "aws_github_deploy_role_arn" {
   description = "Role for GitHub Actions to assume via OIDC (set github_repository to create it)"
 }
 
+output "amplify_custom_domain" {
+  value       = var.custom_domain != "" ? var.custom_domain : null
+  description = "Custom domain associated with Amplify (null when unset)"
+}
+
+output "amplify_domain_dns_records" {
+  value = var.custom_domain != "" ? {
+    certificate_verification = aws_amplify_domain_association.main[0].certificate_verification_dns_record
+    sub_domain               = aws_amplify_domain_association.main[0].sub_domain[*].dns_record
+  } : null
+  description = "CNAME records to add at your DNS provider for the custom domain"
+}
+
 output "lambda_function_arns" {
   value = {
     for k, v in aws_lambda_function.handlers : k => v.arn

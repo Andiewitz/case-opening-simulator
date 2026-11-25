@@ -12,3 +12,7 @@ github_repository = "Andiewitz/case-opening-simulator"
 # CloudFront stays off until the AWS account-verification clears
 # (docs/aws-cloudfront-verification.md). Amplify serves the frontend.
 enable_cloudfront = false
+
+# Free readable domain via is-a.dev (GitHub PR). Amplify provisions the ACM
+# cert; the two CNAMEs to add are in the amplify_domain_dns_records output.
+custom_domain = "cs2unboxed.is-a.dev"
