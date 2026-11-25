@@ -225,6 +225,33 @@ export async function confirmSignUp(email: string, code: string): Promise<void> 
   if (!res.ok || data.__type) throw friendlyAuthError({ name: data.__type });
 }
 
+/** Start the forgot-password flow: Cognito emails a reset code (H5). */
+export async function forgotPassword(email: string): Promise<void> {
+  const res = await fetch(cognitoTargetUrl(), {
+    method: "POST",
+    headers: { ...RESP_HEADERS, "X-Amz-Target": "AWSCognitoIdentityProviderService.ForgotPassword" },
+    body: JSON.stringify({ ClientId: COGNITO_CLIENT_ID, Username: email }),
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data.__type) throw friendlyAuthError({ name: data.__type });
+}
+
+/** Complete the reset with the emailed code and a new password. */
+export async function confirmForgotPassword(email: string, code: string, newPassword: string): Promise<void> {
+  const res = await fetch(cognitoTargetUrl(), {
+    method: "POST",
+    headers: { ...RESP_HEADERS, "X-Amz-Target": "AWSCognitoIdentityProviderService.ConfirmForgotPassword" },
+    body: JSON.stringify({
+      ClientId: COGNITO_CLIENT_ID,
+      Username: email,
+      ConfirmationCode: code,
+      Password: newPassword,
+    }),
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data.__type) throw friendlyAuthError({ name: data.__type });
+}
+
 export function onAuthStateChanged(callback: (user: any | null) => void): () => void {
   const check = () => callback(getCurrentUser());
   check();

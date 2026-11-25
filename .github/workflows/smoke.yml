@@ -1,0 +1,73 @@
+name: Smoke
+
+# Hourly production smoke check. The deploy workflow checks the live site once,
+# right after a deploy; nothing notices a regression that appears later (an
+# expired certificate, a broken SPA rewrite, an empty crate pool). This opens an
+# issue when the site stops being healthy.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: smoke-production
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Production smoke
+    runs-on: ubuntu-latest
+    env:
+      FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+    steps:
+      - name: Check the live site
+        id: check
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          curl -sf -o /dev/null -w "frontend %{http_code}\n" "$FRONTEND_URL/" || fail "frontend / did not return 2xx"
+          curl -sf -o /dev/null -w "spa route %{http_code}\n" "$FRONTEND_URL/inventory" || fail "SPA route /inventory did not return 2xx"
+
+          curl -sf -D /tmp/crates.headers -o /dev/null "$API_BASE_URL/crates" || fail "GET /crates failed"
+          grep -qi "content-encoding: gzip" /tmp/crates.headers || fail "GET /crates is not gzipped"
+
+          curl -sf -o /dev/null -w "config %{http_code}\n" "$API_BASE_URL/config" || fail "GET /config failed"
+
+          echo "smoke checks passed"
+
+      - name: Open an issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "Production smoke check failing";
+            const body = `The scheduled smoke check failed on ${new Date().toISOString()}.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "smoke",
+            });
+            if (open.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: open[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["smoke"],
+              });
+            }

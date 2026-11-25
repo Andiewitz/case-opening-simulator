@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
-import { signInWithPassword, signUp, confirmSignUp } from "../services/auth";
+import {
+  signInWithPassword,
+  signUp,
+  confirmSignUp,
+  forgotPassword,
+  confirmForgotPassword,
+} from "../services/auth";
+
+type Mode = "signin" | "signup" | "confirm" | "reset" | "resetconfirm";
 
 // In-app authentication (direct Cognito USER_PASSWORD_AUTH calls instead of
 // the hosted UI) so sign-in works on any origin, with the app's own styling.
 // This is the only sign-in path — the hosted-UI callback route was removed
-// (docs/plan.md F15).
+// (docs/plan.md F15). The reset modes cover the forgot-password flow (H5).
 export default function AuthModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [mode, setMode] = useState<"signin" | "signup" | "confirm">("signin");
+  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -54,10 +62,18 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
         await signUp(email.trim(), password);
         setMode("confirm");
         setError("Check your email for the confirmation code.");
-      } else {
+      } else if (mode === "confirm") {
         await confirmSignUp(email.trim(), code.trim());
         await signInWithPassword(email.trim(), password);
         onClose();
+      } else if (mode === "reset") {
+        await forgotPassword(email.trim());
+        setMode("resetconfirm");
+        setError("Check your email for the reset code.");
+      } else {
+        await confirmForgotPassword(email.trim(), code.trim(), password);
+        setMode("signin");
+        setError("Password updated. Sign in with your new password.");
       }
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Please try again.");
@@ -66,7 +82,32 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
     }
   };
 
-  const title = mode === "signin" ? "Welcome back" : mode === "signup" ? "Create account" : "Confirm sign-up";
+  const title =
+    mode === "signin"
+      ? "Welcome back"
+      : mode === "signup"
+        ? "Create account"
+        : mode === "confirm"
+          ? "Confirm sign-up"
+          : mode === "reset"
+            ? "Reset password"
+            : "Set new password";
+
+  const showEmail = mode !== "confirm";
+  const showPassword = mode === "signin" || mode === "signup" || mode === "resetconfirm";
+  const showCode = mode === "confirm" || mode === "resetconfirm";
+  const isOk = error?.startsWith("Check your email") || error?.startsWith("Password updated");
+
+  const buttonLabel =
+    mode === "signin"
+      ? "Sign In"
+      : mode === "signup"
+        ? "Create Account"
+        : mode === "confirm"
+          ? "Confirm & Sign In"
+          : mode === "reset"
+            ? "Send Reset Code"
+            : "Update Password";
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -87,10 +128,12 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
           {mode === "signin" && "Sign in to open cases and manage your inventory."}
           {mode === "signup" && "Virtual balance only. No real money required."}
           {mode === "confirm" && "Enter the code we emailed to " + email.trim() + "."}
+          {mode === "reset" && "Enter your email and we will send a reset code."}
+          {mode === "resetconfirm" && "Enter the code we emailed to " + email.trim() + " and a new password."}
         </p>
 
         <form onSubmit={submit} className="uo-form">
-          {mode !== "confirm" && (
+          {showEmail && (
             <input
               ref={firstFieldRef}
               type="email"
@@ -102,20 +145,20 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
               className="uo-field"
             />
           )}
-          {mode !== "confirm" && (
+          {showPassword && (
             <input
               type="password"
               required
               autoComplete={mode === "signin" ? "current-password" : "new-password"}
-              placeholder="Password"
+              placeholder={mode === "resetconfirm" ? "New password" : "Password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="uo-field"
             />
           )}
-          {mode === "confirm" && (
+          {showCode && (
             <input
-              ref={firstFieldRef}
+              ref={showEmail ? undefined : firstFieldRef}
               type="text"
               required
               inputMode="numeric"
@@ -130,22 +173,27 @@ export default function AuthModal({ open, onClose }: { open: boolean; onClose: (
           {error && (
             <p
               role="status"
-              className={"uo-form-msg " + (error.startsWith("Check your email") ? "is-ok" : "is-error")}
+              className={"uo-form-msg " + (isOk ? "is-ok" : "is-error")}
             >
               {error}
             </p>
           )}
 
           <button type="submit" disabled={busy} className="uo-btn uo-btn-primary uo-btn-block">
-            {busy ? "Working…" : mode === "signin" ? "Sign In" : mode === "signup" ? "Create Account" : "Confirm & Sign In"}
+            {busy ? "Working…" : buttonLabel}
           </button>
         </form>
 
         <div className="uo-modal-note">
           {mode === "signin" ? (
-            <button onClick={() => { setMode("signup"); setError(null); }}>
-              No account yet? Create one
-            </button>
+            <>
+              <button onClick={() => { setMode("signup"); setError(null); }}>
+                No account yet? Create one
+              </button>
+              <button onClick={() => { setMode("reset"); setError(null); }}>
+                Forgot password?
+              </button>
+            </>
           ) : (
             <button onClick={() => { setMode("signin"); setError(null); }}>
               Back to sign in

@@ -14,6 +14,19 @@ export type Row = Record<string, any>;
 /** table name -> ordered key attribute names (hash, optional range). */
 export type Schema = Record<string, string[]>;
 
+// Real DynamoDB limits the fake enforces, so a change that would exceed them
+// in production fails a test instead of passing silently (H9).
+const MAX_TRANSACTION_ITEMS = 100;
+const MAX_ITEM_BYTES = 400 * 1024;
+
+function validationException(message: string): Error {
+  return Object.assign(new Error(message), { name: "ValidationException" });
+}
+
+function itemBytes(item: Row): number {
+  return Buffer.byteLength(JSON.stringify(item), "utf8");
+}
+
 export class FakeDynamo {
   private tables = new Map<string, Map<string, Row>>();
 
@@ -123,6 +136,12 @@ export class FakeDynamo {
   }
 
   transact(transactItems: any[]) {
+    if (transactItems.length > MAX_TRANSACTION_ITEMS) {
+      throw validationException(
+        `Transaction cannot have more than ${MAX_TRANSACTION_ITEMS} actions (got ${transactItems.length})`
+      );
+    }
+
     const reasons = transactItems.map((item) => {
       const condition = conditionOf(item);
       if (!condition) return { Code: "None" };
@@ -164,6 +183,12 @@ export class FakeDynamo {
   }
 
   private applyPut(input: any): void {
+    const bytes = itemBytes(input.Item);
+    if (bytes > MAX_ITEM_BYTES) {
+      throw validationException(
+        `Item size (${bytes} bytes) exceeds the ${MAX_ITEM_BYTES}-byte limit for table ${input.TableName}`
+      );
+    }
     this.table(input.TableName).set(this.keyOf(input.TableName, this.keyAttrs(input.TableName, input.Item)), { ...input.Item });
   }
 

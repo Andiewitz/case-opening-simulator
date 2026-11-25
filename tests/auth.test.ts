@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  confirmForgotPassword,
   confirmSignUp,
   decodeJwt,
+  forgotPassword,
   getAccessToken,
   getCurrentUser,
   getValidAccessToken,
@@ -149,6 +151,43 @@ describe("signUp and confirmSignUp", () => {
     fetchMock.mockResolvedValue(jsonResponse(200, {}));
     await expect(signUp("a@b.c", "Password123")).resolves.toBeUndefined();
     await expect(confirmSignUp("a@b.c", "123456")).resolves.toBeUndefined();
+  });
+});
+
+describe("forgotPassword and confirmForgotPassword", () => {
+  it("sends a reset code and completes the reset", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, {}));
+
+    await expect(forgotPassword("a@b.c")).resolves.toBeUndefined();
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers["X-Amz-Target"]).toBe("AWSCognitoIdentityProviderService.ForgotPassword");
+    expect(JSON.parse(init.body)).toMatchObject({ ClientId: expect.any(String), Username: "a@b.c" });
+
+    await expect(confirmForgotPassword("a@b.c", "123456", "NewPassword1")).resolves.toBeUndefined();
+    const [, confirmInit] = fetchMock.mock.calls[1];
+    expect(confirmInit.headers["X-Amz-Target"]).toBe(
+      "AWSCognitoIdentityProviderService.ConfirmForgotPassword"
+    );
+    expect(JSON.parse(confirmInit.body)).toMatchObject({
+      Username: "a@b.c",
+      ConfirmationCode: "123456",
+      Password: "NewPassword1",
+    });
+  });
+
+  it("surfaces a bad reset code", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(400, { __type: "CodeMismatchException" }));
+    await expect(confirmForgotPassword("a@b.c", "000000", "NewPassword1")).rejects.toThrow(/incorrect/);
+  });
+
+  it("surfaces an expired reset code", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(400, { __type: "ExpiredCodeException" }));
+    await expect(forgotPassword("a@b.c")).rejects.toThrow(/expired/);
+  });
+
+  it("surfaces a rate limit", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(400, { __type: "LimitExceededException" }));
+    await expect(forgotPassword("a@b.c")).rejects.toThrow(/Too many attempts/);
   });
 });
 

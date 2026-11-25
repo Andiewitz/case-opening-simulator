@@ -106,6 +106,8 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
 
+  alarm_actions = [aws_sns_topic.alarms.arn]
+
   tags = {
     Name        = "${var.app_name}-${each.key}-errors"
     Environment = var.environment

@@ -348,6 +348,8 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx" {
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
 
+  alarm_actions = [aws_sns_topic.alarms.arn]
+
   tags = {
     Name        = "${var.app_name}-api-5xx"
     Environment = var.environment
